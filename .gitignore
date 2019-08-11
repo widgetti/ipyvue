@@ -1,0 +1,12 @@
+*.egg-info/
+.eggs/
+.ipynb_checkpoints/
+dist/
+build/
+*.py[cod]
+**/node_modules/
+
+# Compiled javascript
+ipyvue/static/
+js/lib
+js/jupyter-vue-*.tgz
