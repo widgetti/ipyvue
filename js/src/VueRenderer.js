@@ -95,7 +95,7 @@ function addListeners(model, vueModel) {
 function createAttrsMapping(model) {
     const useAsAttr = key => model.get(key) !== null
         && !key.startsWith('_')
-        && !['layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
+        && !['attributes', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
 
     return model.keys()
         .filter(useAsAttr)
@@ -116,11 +116,15 @@ function createEventMapping(model, parentView) {
 }
 
 function createContent(model, vueModel, parentView) {
+    const htmlEventAttributes = model.get('attributes') && Object.keys(model.get('attributes')).filter(key => key.startsWith('on'));
+    if (htmlEventAttributes && htmlEventAttributes.length > 0) {
+        throw new Error(`No HTML event attributes may be used: ${htmlEventAttributes}`);
+    }
     return {
         on: createEventMapping(model, parentView),
         ...model.get('style_') && { style: model.get('style_') },
         ...model.get('class_') && { class: model.get('class_') },
-        attrs: createAttrsMapping(model),
+        attrs: { ...createAttrsMapping(model), ...model.get('attributes') && model.get('attributes') },
         ...model.get('v_model') !== '!!disabled!!' && {
             model: {
                 value: vueModel.v_model,

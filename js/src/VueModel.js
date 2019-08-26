@@ -22,6 +22,7 @@ export class VueModel extends DOMWidgetModel {
                 v_model: '!!disabled!!',
                 style_: null,
                 class_: null,
+                attributes: null,
             },
         };
     }

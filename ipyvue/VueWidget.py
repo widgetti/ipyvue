@@ -1,4 +1,4 @@
-from traitlets import (Unicode, Instance, Union, List, Any)
+from traitlets import (Unicode, Instance, Union, List, Any, Dict)
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import (widget_serialization, CallbackDispatcher)
 from ._version import semver
@@ -63,6 +63,8 @@ class VueWidget(DOMWidget, Events):
     style_ = Unicode(None, allow_none=True).tag(sync=True)
 
     class_ = Unicode(None, allow_none=True).tag(sync=True)
+
+    attributes = Dict(None, allow_none=True).tag(sync=True)
 
 
 __all__ = ['VueWidget']
