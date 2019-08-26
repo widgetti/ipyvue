@@ -17,6 +17,15 @@ function createComponentObject(model, parentView) {
     if (!(model instanceof VueTemplateModel)) {
         return createObjectForNestedModel(model, parentView);
     }
+    if (model.get('css')) {
+        const style = document.createElement('style');
+        style.id = model.cid;
+        style.innerHTML = model.get('css');
+        document.head.appendChild(style);
+        parentView.once('remove', () => {
+            document.head.removeChild(style);
+        });
+    }
     return {
         data() {
             return createDataMapping(model);
