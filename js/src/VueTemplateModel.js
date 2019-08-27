@@ -15,6 +15,8 @@ export class VueTemplateModel extends DOMWidgetModel {
                 _model_module_version: '^0.0.3',
                 template: null,
                 css: null,
+                methods: null,
+                data: null,
                 events: null,
             },
         };

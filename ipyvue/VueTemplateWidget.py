@@ -38,6 +38,10 @@ class VueTemplate(DOMWidget, Events):
 
     css = Unicode(None, allow_none=True).tag(sync=True)
 
+    methods = Unicode(None, allow_none=True).tag(sync=True)
+
+    data = Unicode(None, allow_none=True).tag(sync=True)
+
     events = List(Unicode(), default_value=None, allow_none=True).tag(sync=True)
 
     components = Dict(default_value=None, allow_none=True).tag(sync=True, **widget_serialization)

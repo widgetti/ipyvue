@@ -26,15 +26,21 @@ function createComponentObject(model, parentView) {
             document.head.removeChild(style);
         });
     }
+
+    // eslint-disable-next-line no-new-func
+    const methods = model.get('methods') ? Function(`return ${model.get('methods').replace('\n', ' ')}`)() : {};
+    // eslint-disable-next-line no-new-func
+    const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
+
     return {
         data() {
-            return createDataMapping(model);
+            return { ...data, ...createDataMapping(model) };
         },
         created() {
             addModelListeners(model, this);
         },
         watch: createWatches(model, parentView),
-        methods: createMethods(model, parentView),
+        methods: { ...methods, ...createMethods(model, parentView) },
         components: createComponents(model.get('components') || {}, parentView),
         template: model.get('template'),
     };
