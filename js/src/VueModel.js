@@ -23,6 +23,8 @@ export class VueModel extends DOMWidgetModel {
                 style_: null,
                 class_: null,
                 attributes: null,
+                v_slots: null,
+                v_slot_use: null,
             },
         };
     }
@@ -31,4 +33,5 @@ export class VueModel extends DOMWidgetModel {
 VueModel.serializers = {
     ...DOMWidgetModel.serializers,
     children: { deserialize: unpack_models },
+    v_slots: { deserialize: unpack_models },
 };

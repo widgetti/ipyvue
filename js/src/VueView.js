@@ -16,7 +16,7 @@ export class VueView extends DOMWidgetView {
 
         this.vueApp = new Vue({
             el: vueEl,
-            render: createElement => vueRender(createElement, this.model, this),
+            render: createElement => vueRender(createElement, this.model, this, {}),
         });
     }
 }

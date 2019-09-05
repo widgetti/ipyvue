@@ -42,7 +42,7 @@ export function eventToObject(event) {
     );
 }
 
-export function vueRender(createElement, model, parentView) {
+export function vueRender(createElement, model, parentView, slotScopes) {
     if (model instanceof VueTemplateModel) {
         return vueTemplateRender(createElement, model, parentView);
     }
@@ -63,8 +63,8 @@ export function vueRender(createElement, model, parentView) {
         render(createElement2) {
             return createElement2(
                 tag,
-                createContent(model, this, parentView),
-                renderChildren(createElement2, model, this, parentView),
+                createContent(createElement2, model, this, parentView, slotScopes),
+                renderChildren(createElement2, model.get('children'), this, parentView, slotScopes),
             );
         },
     }, { ...model.get('slot') && { slot: model.get('slot') } });
@@ -95,7 +95,7 @@ function addListeners(model, vueModel) {
 function createAttrsMapping(model) {
     const useAsAttr = key => model.get(key) !== null
         && !key.startsWith('_')
-        && !['attributes', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
+        && !['attributes', 'v_slots', 'v_slot_use', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
 
     return model.keys()
         .filter(useAsAttr)
@@ -115,16 +115,78 @@ function createEventMapping(model, parentView) {
         }, {});
 }
 
-function createContent(model, vueModel, parentView) {
+function createSlots(createElement, model, vueModel, parentView, slotScopes) {
+    const slots = model.get('v_slots');
+    if (!slots) {
+        return undefined;
+    }
+    return slots.map(slot => ({
+        key: slot.name,
+        ...!slot.scope && { proxy: true },
+        fn(slotScope) {
+            return renderChildren(createElement,
+                Array.isArray(slot.content) ? slot.content : [slot.content],
+                vueModel, parentView, {
+                    ...slotScopes,
+                    ...slot.scope && { [slot.scope]: slotScope },
+                });
+        },
+    }));
+}
+
+function getScope(value, slotScopes) {
+    const parts = value.split('.');
+    return parts
+        .slice(1)
+        .reduce(
+            (scope, name) => scope[name],
+            slotScopes[parts[0]],
+        );
+}
+
+function getScopes(value, slotScopes) {
+    return typeof value === 'string'
+        ? getScope(value, slotScopes)
+        : Object.assign({}, ...value.map(v => getScope(v, slotScopes)));
+}
+
+function slotUseOn(model, slotScopes) {
+    const vOnValue = model.get('v_slot_use') && model.get('v_slot_use')['v-on'];
+    return vOnValue && getScopes(vOnValue, slotScopes);
+}
+
+function slotUseAttr(model, slotScopes) {
+    const attrs = model.get('v_slot_use') && Object.entries(model.get('v_slot_use'))
+        .filter(([attr, _]) => attr.startsWith(':')) // eslint-disable-line no-unused-vars
+        .map(([attr, value]) => [attr.slice(1), value]);
+    if (!attrs) {
+        return undefined;
+    }
+
+    return attrs.reduce(
+        (attrObj, [attr, value]) => ({ ...attrObj, [attr]: getScopes(value, slotScopes) }),
+        {},
+    );
+}
+
+function createContent(createElement, model, vueModel, parentView, slotScopes) {
     const htmlEventAttributes = model.get('attributes') && Object.keys(model.get('attributes')).filter(key => key.startsWith('on'));
     if (htmlEventAttributes && htmlEventAttributes.length > 0) {
         throw new Error(`No HTML event attributes may be used: ${htmlEventAttributes}`);
     }
+
+    const scopedSlots = createSlots(createElement, model, vueModel, parentView, slotScopes);
+
     return {
-        on: createEventMapping(model, parentView),
+        on: { ...createEventMapping(model, parentView), ...slotUseOn(model, slotScopes) },
         ...model.get('style_') && { style: model.get('style_') },
         ...model.get('class_') && { class: model.get('class_') },
-        attrs: { ...createAttrsMapping(model), ...model.get('attributes') && model.get('attributes') },
+        ...scopedSlots && { scopedSlots: vueModel._u(scopedSlots) },
+        attrs: {
+            ...createAttrsMapping(model),
+            ...model.get('attributes') && model.get('attributes'),
+            ...slotUseAttr(model, slotScopes),
+        },
         ...model.get('v_model') !== '!!disabled!!' && {
             model: {
                 value: vueModel.v_model,
@@ -138,24 +200,24 @@ function createContent(model, vueModel, parentView) {
     };
 }
 
-function renderChildren(createElement, model, vueModel, parentView) {
+function renderChildren(createElement, children, vueModel, parentView, slotScopes) {
     if (!vueModel.childCache) {
         vueModel.childCache = {}; // eslint-disable-line no-param-reassign
     }
-    const childViewModels = model.get('children').map((child) => {
+    const childViewModels = children.map((child) => {
         if (typeof (child) === 'string') {
             return child;
         }
         if (vueModel.childCache[child.cid]) {
             return vueModel.childCache[child.cid];
         }
-        const vm = vueRender(createElement, child, parentView);
+        const vm = vueRender(createElement, child, parentView, slotScopes);
         vueModel.childCache[child.cid] = vm; // eslint-disable-line no-param-reassign
         return vm;
     });
 
     /* Remove unused components */
-    const childIds = model.get('children').map(child => child.cid);
+    const childIds = children.map(child => child.cid);
     Object.keys(vueModel.childCache)
         .filter(key => !childIds.includes(key))
         // eslint-disable-next-line no-param-reassign

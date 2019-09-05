@@ -10,7 +10,7 @@ function createComponentObject(model, parentView) {
     if (model instanceof VueModel) {
         return {
             render(createElement) {
-                return vueRender(createElement, model, parentView);
+                return vueRender(createElement, model, parentView, {});
             },
         };
     }

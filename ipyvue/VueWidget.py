@@ -66,5 +66,9 @@ class VueWidget(DOMWidget, Events):
 
     attributes = Dict(None, allow_none=True).tag(sync=True)
 
+    v_slots = List(Dict()).tag(sync=True, **widget_serialization)
+
+    v_slot_use = Dict().tag(sync=True)
+
 
 __all__ = ['VueWidget']
