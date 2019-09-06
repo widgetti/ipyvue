@@ -10,13 +10,18 @@ class Events(object):
         self._event_handlers_map = {}
         self.on_msg(self._handle_event)
 
-    def on_event(self, event, callback, remove=False):
-        self._event_handlers_map[event] = CallbackDispatcher()
+    def on_event(self, event_and_modifiers, callback, remove=False):
+        new_event = event_and_modifiers.split('.')[0]
+        for existing_event in [event for event in self._event_handlers_map.keys()
+                               if event == new_event or event.startswith(new_event + '.')]:
+            del self._event_handlers_map[existing_event]
 
-        self._event_handlers_map[event].register_callback(callback, remove=remove)
+        self._event_handlers_map[event_and_modifiers] = CallbackDispatcher()
 
-        if remove and not self._event_handlers_map[event].callbacks:
-            del self._event_handlers_map[event]
+        self._event_handlers_map[event_and_modifiers].register_callback(callback, remove=remove)
+
+        if remove and not self._event_handlers_map[event_and_modifiers].callbacks:
+            del self._event_handlers_map[event_and_modifiers]
 
         difference = set(self._event_handlers_map.keys()) ^ set(self._events)
         if len(difference) != 0:

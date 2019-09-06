@@ -105,14 +105,44 @@ function createAttrsMapping(model) {
         }, {});
 }
 
+function addEventWithModifiers(eventAndModifiers, obj, fn) {
+    const [eventName, ...modifiers] = eventAndModifiers.split('.');
+
+    const nameModifiersMap = {
+        capture: '!',
+        once: '~',
+        passive: '&',
+    };
+
+    const nameModifiers = modifiers
+        .map(modifier => nameModifiersMap[modifier])
+        .filter(x => x)
+        .join('');
+
+    return {
+        ...obj,
+        [`${nameModifiers}${eventName}`](event) {
+            if (modifiers.includes('stop')) event.stopPropagation();
+            if (modifiers.includes('prevent')) event.preventDefault();
+            if (modifiers.includes('self') && event.target !== event.currentTarget) return;
+            fn(event);
+        },
+    };
+}
+
 function createEventMapping(model, parentView) {
     return (model.get('_events') || [])
-        .reduce((result, event) => {
-            result[event] = (e) => { // eslint-disable-line no-param-reassign
-                model.send({ event, data: eventToObject(e) }, model.callbacks(parentView));
-            };
-            return result;
-        }, {});
+        .reduce((result, eventAndModifiers) => addEventWithModifiers(
+            eventAndModifiers,
+            result,
+            (e) => {
+                model.send({
+                    event: eventAndModifiers,
+                    data: eventToObject(e),
+                },
+                model.callbacks(parentView));
+            },
+        ), {});
 }
 
 function createSlots(createElement, model, vueModel, parentView, slotScopes) {
