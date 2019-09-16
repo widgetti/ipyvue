@@ -1,9 +1,4 @@
-import { addCompiler } from '@mariobuikhuizen/vue-compiler-addon';
-import Vue from 'vue';
-
-addCompiler(Vue);
-
-export { Vue };
+export { default as Vue } from './VueWithCompiler';
 export { VueModel } from './VueModel';
 export { VueTemplateModel } from './VueTemplateModel';
 export { VueView } from './VueView';

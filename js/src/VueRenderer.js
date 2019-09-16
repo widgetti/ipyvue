@@ -3,6 +3,7 @@ import { JupyterPhosphorWidget } from '@jupyter-widgets/base';
 import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
+import Vue from './VueWithCompiler';
 
 export function createObjectForNestedModel(model, parentView) {
     const viewPromise = parentView.create_child_view(model);
@@ -105,28 +106,34 @@ function createAttrsMapping(model) {
         }, {});
 }
 
-function addEventWithModifiers(eventAndModifiers, obj, fn) {
-    const [eventName, ...modifiers] = eventAndModifiers.split('.');
-
-    const nameModifiersMap = {
-        capture: '!',
-        once: '~',
-        passive: '&',
-    };
-
-    const nameModifiers = modifiers
-        .map(modifier => nameModifiersMap[modifier])
-        .filter(x => x)
-        .join('');
+function addEventWithModifiers(eventAndModifiers, obj, fn) { // eslint-disable-line no-unused-vars
+    /* Example Vue.compile output:
+     * (function anonymous() {
+     *         with (this) {
+     *             return _c('dummy', {
+     *                 on: {
+     *                     "[event]": function ($event) {
+     *                         if (!$event.type.indexOf('key') && _k($event.keyCode, "c", ...)
+     *                             return null;
+     *                         ...
+     *                         return [fn]($event)
+     *                     }
+     *                 }
+     *             })
+     *         }
+     *     }
+     * )
+     */
+    const { on } = Vue.compile(`<dummy @${eventAndModifiers}="fn"></dummy>`)
+        .render.bind({
+            _c: (_, data) => data,
+            _k: Vue.prototype._k,
+            fn,
+        })();
 
     return {
         ...obj,
-        [`${nameModifiers}${eventName}`](event) {
-            if (modifiers.includes('stop')) event.stopPropagation();
-            if (modifiers.includes('prevent')) event.preventDefault();
-            if (modifiers.includes('self') && event.target !== event.currentTarget) return;
-            fn(event);
-        },
+        ...on,
     };
 }
 
