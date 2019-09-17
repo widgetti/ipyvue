@@ -95,7 +95,7 @@ function addListeners(model, vueModel) {
 function createAttrsMapping(model) {
     const useAsAttr = key => model.get(key) !== null
         && !key.startsWith('_')
-        && !['attributes', 'v_slots', 'v_slot_use', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
+        && !['attributes', 'v_slots', 'v_on', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
 
     return model.keys()
         .filter(useAsAttr)
@@ -122,13 +122,13 @@ function createSlots(createElement, model, vueModel, parentView, slotScopes) {
     }
     return slots.map(slot => ({
         key: slot.name,
-        ...!slot.scope && { proxy: true },
+        ...!slot.variable && { proxy: true },
         fn(slotScope) {
             return renderChildren(createElement,
-                Array.isArray(slot.content) ? slot.content : [slot.content],
+                Array.isArray(slot.children) ? slot.children : [slot.children],
                 vueModel, parentView, {
                     ...slotScopes,
-                    ...slot.scope && { [slot.scope]: slotScope },
+                    ...slot.variable && { [slot.variable]: slotScope },
                 });
         },
     }));
@@ -151,22 +151,8 @@ function getScopes(value, slotScopes) {
 }
 
 function slotUseOn(model, slotScopes) {
-    const vOnValue = model.get('v_slot_use') && model.get('v_slot_use')['v-on'];
+    const vOnValue = model.get('v_on');
     return vOnValue && getScopes(vOnValue, slotScopes);
-}
-
-function slotUseAttr(model, slotScopes) {
-    const attrs = model.get('v_slot_use') && Object.entries(model.get('v_slot_use'))
-        .filter(([attr, _]) => attr.startsWith(':')) // eslint-disable-line no-unused-vars
-        .map(([attr, value]) => [attr.slice(1), value]);
-    if (!attrs) {
-        return undefined;
-    }
-
-    return attrs.reduce(
-        (attrObj, [attr, value]) => ({ ...attrObj, [attr]: getScopes(value, slotScopes) }),
-        {},
-    );
 }
 
 function createContent(createElement, model, vueModel, parentView, slotScopes) {
@@ -185,7 +171,6 @@ function createContent(createElement, model, vueModel, parentView, slotScopes) {
         attrs: {
             ...createAttrsMapping(model),
             ...model.get('attributes') && model.get('attributes'),
-            ...slotUseAttr(model, slotScopes),
         },
         ...model.get('v_model') !== '!!disabled!!' && {
             model: {

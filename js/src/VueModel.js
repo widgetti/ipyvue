@@ -24,7 +24,7 @@ export class VueModel extends DOMWidgetModel {
                 class_: null,
                 attributes: null,
                 v_slots: null,
-                v_slot_use: null,
+                v_on: null,
             },
         };
     }
