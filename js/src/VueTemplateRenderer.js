@@ -42,8 +42,12 @@ function createComponentObject(model, parentView) {
         watch: createWatches(model, parentView),
         methods: { ...methods, ...createMethods(model, parentView) },
         components: createComponents(model.get('components') || {}, parentView),
-        template: model.get('template'),
+        template: trimTemplateTags(model.get('template')),
     };
+}
+
+function trimTemplateTags(template) {
+    return template.replace(/^\s*<template>/ig, '').replace(/<\/template>\s*$/ig, '');
 }
 
 function createDataMapping(model) {
