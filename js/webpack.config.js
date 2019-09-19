@@ -34,11 +34,14 @@ module.exports = [
             libraryTarget: 'amd'
         },
         devtool: 'source-map',
-        externals: ['@jupyter-widgets/base', 'lodash', 'vue'],
+        externals: ['@jupyter-widgets/base', 'lodash', 'vue', '@mariobuikhuizen/vue-compiler-addon'],
         mode: 'production',
         performance: {
             maxEntrypointSize: 1400000,
             maxAssetSize: 1400000
+        },
+        resolve: {
+            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
         },
     },
     {
@@ -50,11 +53,14 @@ module.exports = [
             publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/'
         },
         devtool: 'source-map',
-        externals: ['@jupyter-widgets/base', 'lodash', 'vue'],
+        externals: ['@jupyter-widgets/base', 'lodash', 'vue', '@mariobuikhuizen/vue-compiler-addon'],
         mode: 'production',
         performance: {
             maxEntrypointSize: 1400000,
             maxAssetSize: 1400000
+        },
+        resolve: {
+            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
         },
     },
     {
