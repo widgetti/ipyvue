@@ -1,3 +1,4 @@
+export { default as Vue } from 'vue';
 export { VueModel } from './VueModel';
 export { VueTemplateModel } from './VueTemplateModel';
 export { VueView } from './VueView';
