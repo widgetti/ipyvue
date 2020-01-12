@@ -6,11 +6,12 @@ import { VueTemplateModel } from './VueTemplateModel';
 import Vue from './VueWithCompiler';
 
 export function createObjectForNestedModel(model, parentView) {
-    const viewPromise = parentView.create_child_view(model);
 
     return {
         mounted() {
-            viewPromise.then(view => JupyterPhosphorWidget.attach(view.pWidget, this.$el));
+            parentView
+                .create_child_view(model)
+                .then(view => JupyterPhosphorWidget.attach(view.pWidget, this.$el));
         },
         render(createElement) {
             return createElement('div', { style: { height: '100%' } });
