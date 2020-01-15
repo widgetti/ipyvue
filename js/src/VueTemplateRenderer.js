@@ -149,6 +149,7 @@ function createClassComponents(components, containerModel, parentView) {
                 ...accumulator,
                 [prop](value) {
                     this.model.set(prop, value);
+                    this.model.save_changes(this.model.callbacks(parentView));
                 }
             }), {}),
             render(createElement) {
