@@ -145,6 +145,12 @@ function createClassComponents(components, containerModel, parentView) {
                     },
                     containerModel.callbacks(parentView));
             },
+            watch: componentSpec.props.reduce((accumulator, prop) => ({
+                ...accumulator,
+                [prop](value) {
+                    this.model.set(prop, value);
+                }
+            }), {}),
             render(createElement) {
                 if (this.model) {
                     return vueRender(createElement, this.model, parentView, {});
