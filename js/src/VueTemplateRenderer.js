@@ -50,6 +50,7 @@ function createComponentObject(model, parentView) {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
         },
+        computed: aliasRefProps(model),
         template: trimTemplateTags(model.get('template')),
     };
 }
@@ -148,8 +149,19 @@ function createClassComponents(components, containerModel, parentView) {
             watch: componentSpec.props.reduce((accumulator, prop) => ({
                 ...accumulator,
                 [prop](value) {
-                    this.model.set(prop, value);
-                    this.model.save_changes(this.model.callbacks(parentView));
+                    if (value.PY_REF) {
+                        containerModel.send(
+                            {
+                                'update_ref': value,
+                                prop,
+                                'id': this.id,
+                            },
+                            containerModel.callbacks(parentView),
+                        );
+                    } else {
+                        this.model.set(prop, value);
+                        this.model.save_changes(this.model.callbacks(parentView));
+                    }
                 }
             }), {}),
             render(createElement) {
@@ -161,4 +173,20 @@ function createClassComponents(components, containerModel, parentView) {
             }
         }),
     }), {})
+}
+
+/* Returns a map with computed properties so that myProp_ref is available as myProp in the template
+ * (only if myProp does not exist).
+ */
+function aliasRefProps(model) {
+    return model.keys()
+        .filter(key => key.endsWith('_ref'))
+        .map(propRef => [propRef, propRef.substring(0, propRef.length - 4)])
+        .filter(([, prop]) => !model.keys().includes(prop))
+        .reduce((accumulator, [propRef, prop]) => ({
+            ...accumulator,
+            [prop]() {
+                return this[propRef];
+            },
+        }), {});
 }
