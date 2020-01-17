@@ -1,7 +1,7 @@
+import { WidgetModel } from '@jupyter-widgets/base';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
-import { WidgetModel } from '@jupyter-widgets/base';
 
 export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
@@ -34,8 +34,8 @@ function createComponentObject(model, parentView) {
     const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
     const componentEntries = Object.entries(model.get('components') || {});
-    const instanceComponents = componentEntries.filter(([k, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([k, v]) => !(v instanceof WidgetModel));
+    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
 
     return {
         data() {
@@ -117,14 +117,14 @@ function createClassComponents(components, containerModel, parentView) {
                     model: null,
                     // TODO: use UUID
                     id: `${Math.random()}`.substring(2),
-                }
+                };
             },
             created() {
                 const fn = () => {
                     if (!this.model) {
-                        const new_model = containerModel.get('_component_instances').find(wm => wm.model_id === this.id);
-                        if (new_model) {
-                            this.model = new_model;
+                        const newModel = containerModel.get('_component_instances').find(wm => wm.model_id === this.id);
+                        if (newModel) {
+                            this.model = newModel;
                         }
                     } else {
                         containerModel.off('change:_component_instances', fn);
@@ -133,28 +133,30 @@ function createClassComponents(components, containerModel, parentView) {
                 containerModel.on('change:_component_instances', fn);
                 containerModel.send(
                     {
-                        'create_widget': componentSpec.class,
-                        'id': this.id,
-                        'props': this.$options.propsData,
+                        create_widget: componentSpec.class, // eslint-disable-line camelcase
+                        id: this.id,
+                        props: this.$options.propsData,
                     },
-                    containerModel.callbacks(parentView));
+                    containerModel.callbacks(parentView),
+                );
             },
             destroyed() {
                 containerModel.send(
                     {
-                        'destroy_widget': this.id,
+                        destroy_widget: this.id, // eslint-disable-line camelcase
                     },
-                    containerModel.callbacks(parentView));
+                    containerModel.callbacks(parentView),
+                );
             },
-            watch: componentSpec.props.reduce((accumulator, prop) => ({
-                ...accumulator,
+            watch: componentSpec.props.reduce((watchAccumulator, prop) => ({
+                ...watchAccumulator,
                 [prop](value) {
                     if (value.PY_REF) {
                         containerModel.send(
                             {
-                                'update_ref': value,
+                                update_ref: value, // eslint-disable-line camelcase
                                 prop,
-                                'id': this.id,
+                                id: this.id,
                             },
                             containerModel.callbacks(parentView),
                         );
@@ -162,17 +164,16 @@ function createClassComponents(components, containerModel, parentView) {
                         this.model.set(prop, value);
                         this.model.save_changes(this.model.callbacks(parentView));
                     }
-                }
+                },
             }), {}),
             render(createElement) {
                 if (this.model) {
                     return vueRender(createElement, this.model, parentView, {});
-                } else {
-                    return createElement('div', ['temp-content']);
                 }
-            }
+                return createElement('div', ['temp-content']);
+            },
         }),
-    }), {})
+    }), {});
 }
 
 /* Returns a map with computed properties so that myProp_ref is available as myProp in the template

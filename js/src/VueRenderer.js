@@ -6,7 +6,6 @@ import { VueTemplateModel } from './VueTemplateModel';
 import Vue from './VueWithCompiler';
 
 export function createObjectForNestedModel(model, parentView) {
-
     return {
         mounted() {
             parentView

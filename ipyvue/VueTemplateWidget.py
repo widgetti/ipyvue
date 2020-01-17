@@ -6,6 +6,7 @@ from .ForceLoad import force_load_instance
 import inspect
 from importlib import import_module
 
+
 class Events(object):
     def __init__(self, **kwargs):
         self.on_msg(self._handle_event)
@@ -29,7 +30,7 @@ class Events(object):
         if 'create_widget' in content.keys():
             module_name = content['create_widget'][0]
             class_name = content['create_widget'][1]
-            props =  {k: resolve_ref(v) for k, v in content['props'].items()}
+            props = {k: resolve_ref(v) for k, v in content['props'].items()}
             module = import_module(module_name)
             widget = getattr(module, class_name)(**props, model_id=content['id'])
             self._component_instances = [*self._component_instances, widget]
@@ -39,7 +40,8 @@ class Events(object):
             obj = resolve_ref(content['update_ref'])
             setattr(widget, prop, obj)
         elif 'destroy_widget' in content.keys():
-            self._component_instances = [w for w in self._component_instances if w.model_id != content['destroy_widget']]
+            self._component_instances = [w for w in self._component_instances
+                                         if w.model_id != content['destroy_widget']]
         elif 'event' in content.keys():
             event = content.get("event", "")
             data = content.get("data", {})
@@ -107,7 +109,8 @@ class VueTemplate(DOMWidget, Events):
 
     events = List(Unicode(), default_value=None, allow_none=True).tag(sync=True)
 
-    components = Dict(default_value=None, allow_none=True).tag(sync=True, **class_component_serialization)
+    components = Dict(default_value=None, allow_none=True).tag(
+        sync=True, **class_component_serialization)
 
     _component_instances = List().tag(sync=True, **widget_serialization)
 
