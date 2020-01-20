@@ -151,7 +151,7 @@ function createClassComponents(components, containerModel, parentView) {
             watch: componentSpec.props.reduce((watchAccumulator, prop) => ({
                 ...watchAccumulator,
                 [prop](value) {
-                    if (value.PY_REF) {
+                    if (value.objectRef) {
                         containerModel.send(
                             {
                                 update_ref: value, // eslint-disable-line camelcase

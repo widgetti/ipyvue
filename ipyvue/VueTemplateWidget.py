@@ -6,6 +6,8 @@ from .ForceLoad import force_load_instance
 import inspect
 from importlib import import_module
 
+OBJECT_REF = 'objectRef'
+FUNCTION_REF = 'functionRef'
 
 class Events(object):
     def __init__(self, **kwargs):
@@ -15,13 +17,13 @@ class Events(object):
     def _handle_event(self, _, content, buffers):
         def resolve_ref(value):
             if isinstance(value, dict):
-                if 'PY_REF' in value.keys():
-                    obj = getattr(self, value["PY_REF"])
+                if OBJECT_REF in value.keys():
+                    obj = getattr(self, value[OBJECT_REF])
                     for path_item in value.get('path', []):
                         obj = obj[path_item]
                     return obj
-                if 'PY_FN' in value.keys():
-                    fn = getattr(self, value["PY_FN"])
+                if FUNCTION_REF in value.keys():
+                    fn = getattr(self, value[FUNCTION_REF])
                     args = value.get('args', [])
                     kwargs = value.get('kwargs', {})
                     return fn(*args, **kwargs)
@@ -71,7 +73,7 @@ def as_refs(name, data):
             return {k: to_ref_structure(v, [*path, k]) for k, v in obj.items()}
 
         # add object id to detect a new object in the same structure
-        return {'PY_REF': name, 'path': path, 'id': id(obj)}
+        return {OBJECT_REF: name, 'path': path, 'id': id(obj)}
 
     return to_ref_structure(data, [])
 
