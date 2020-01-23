@@ -50,6 +50,7 @@ function createComponentObject(model, parentView) {
         components: {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
+            ...createWidgetComponent(model, parentView),
         },
         computed: aliasRefProps(model),
         template: trimTemplateTags(model.get('template')),
@@ -190,4 +191,40 @@ function aliasRefProps(model) {
                 return this[propRef];
             },
         }), {});
+}
+
+function createWidgetComponent(model, parentView) {
+    return {
+        'jupyter-widget': {
+            props: ['widget'],
+            data() {
+                return {
+                    component: null,
+                };
+            },
+            created() {
+                this.update();
+            },
+            watch: {
+                widget() {
+                    this.update();
+                },
+            },
+            methods: {
+                update() {
+                    model.widget_manager
+                        .get_model(this.widget.substring(10))
+                        .then((mdl) => {
+                            this.component = createComponentObject(mdl, parentView);
+                        });
+                },
+            },
+            render(createElement) {
+                if (!this.component) {
+                    return createElement('div');
+                }
+                return createElement(this.component);
+            },
+        },
+    };
 }
