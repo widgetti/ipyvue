@@ -1,4 +1,5 @@
 import { WidgetModel } from '@jupyter-widgets/base';
+import uuid4 from 'uuid/v4';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -115,8 +116,7 @@ function createClassComponents(components, containerModel, parentView) {
             data() {
                 return {
                     model: null,
-                    // TODO: use UUID
-                    id: `${Math.random()}`.substring(2),
+                    id: uuid4(),
                 };
             },
             created() {
