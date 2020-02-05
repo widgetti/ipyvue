@@ -3,7 +3,11 @@ from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
 from ._version import semver
 from .ForceLoad import force_load_instance
+import inspect
+from importlib import import_module
 
+OBJECT_REF = 'objectRef'
+FUNCTION_REF = 'functionRef'
 
 class Events(object):
     def __init__(self, **kwargs):
@@ -11,12 +15,75 @@ class Events(object):
         self.events = [item[4:] for item in dir(self) if item.startswith("vue_")]
 
     def _handle_event(self, _, content, buffers):
-        event = content.get("event", "")
-        data = content.get("data", {})
-        getattr(self, 'vue_' + event)(data)
+        def resolve_ref(value):
+            if isinstance(value, dict):
+                if OBJECT_REF in value.keys():
+                    obj = getattr(self, value[OBJECT_REF])
+                    for path_item in value.get('path', []):
+                        obj = obj[path_item]
+                    return obj
+                if FUNCTION_REF in value.keys():
+                    fn = getattr(self, value[FUNCTION_REF])
+                    args = value.get('args', [])
+                    kwargs = value.get('kwargs', {})
+                    return fn(*args, **kwargs)
+            return value
+
+        if 'create_widget' in content.keys():
+            module_name = content['create_widget'][0]
+            class_name = content['create_widget'][1]
+            props = {k: resolve_ref(v) for k, v in content['props'].items()}
+            module = import_module(module_name)
+            widget = getattr(module, class_name)(**props, model_id=content['id'])
+            self._component_instances = [*self._component_instances, widget]
+        elif 'update_ref' in content.keys():
+            widget = DOMWidget.widgets[content['id']]
+            prop = content['prop']
+            obj = resolve_ref(content['update_ref'])
+            setattr(widget, prop, obj)
+        elif 'destroy_widget' in content.keys():
+            self._component_instances = [w for w in self._component_instances
+                                         if w.model_id != content['destroy_widget']]
+        elif 'event' in content.keys():
+            event = content.get("event", "")
+            data = content.get("data", {})
+            getattr(self, 'vue_' + event)(data)
+
+
+def _value_to_json(x, obj):
+    if inspect.isclass(x):
+        return {
+            'class': [x.__module__, x.__name__],
+            'props': x.class_trait_names()
+        }
+    return widget_serialization['to_json'](x, obj)
+
+
+def _class_to_json(x, obj):
+    if not x:
+        return widget_serialization['to_json'](x, obj)
+    return {k: _value_to_json(v, obj) for k, v in x.items()}
+
+
+def as_refs(name, data):
+    def to_ref_structure(obj, path):
+        if isinstance(obj, list):
+            return [to_ref_structure(item, [*path, index]) for index, item in enumerate(obj)]
+        if isinstance(obj, dict):
+            return {k: to_ref_structure(v, [*path, k]) for k, v in obj.items()}
+
+        # add object id to detect a new object in the same structure
+        return {OBJECT_REF: name, 'path': path, 'id': id(obj)}
+
+    return to_ref_structure(data, [])
 
 
 class VueTemplate(DOMWidget, Events):
+
+    class_component_serialization = {
+        'from_json': widget_serialization['to_json'],
+        'to_json': _class_to_json
+    }
 
     # Force the loading of jupyter-vue before dependent extensions when in a static context (embed,
     # voila)
@@ -44,7 +111,29 @@ class VueTemplate(DOMWidget, Events):
 
     events = List(Unicode(), default_value=None, allow_none=True).tag(sync=True)
 
-    components = Dict(default_value=None, allow_none=True).tag(sync=True, **widget_serialization)
+    components = Dict(default_value=None, allow_none=True).tag(
+        sync=True, **class_component_serialization)
+
+    _component_instances = List().tag(sync=True, **widget_serialization)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        sync_ref_traitlets = [v for k, v in self.traits().items()
+                              if 'sync_ref' in v.metadata.keys()]
+
+        def create_ref_and_observe(traitlet):
+            data = traitlet.get(self)
+            ref_name = traitlet.name + '_ref'
+            self.add_traits(**{ref_name: Any(as_refs(traitlet.name, data)).tag(sync=True)})
+
+            def on_ref_source_change(change):
+                setattr(self, ref_name, as_refs(traitlet.name, change['new']))
+
+            self.observe(on_ref_source_change, traitlet.name)
+
+        for traitlet in sync_ref_traitlets:
+            create_ref_and_observe(traitlet)
 
 
 __all__ = ['VueTemplate']

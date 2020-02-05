@@ -54,6 +54,7 @@
     "@mariobuikhuizen/vue-compiler-addon": "2.6.10",
     "core-js": "^3.0.1",
     "lodash": "^4.17.11",
+    "uuid": "^3.4.0",
     "vue": "^2.6.10"
   },
   "jupyterlab": {

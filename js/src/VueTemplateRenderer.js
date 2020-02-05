@@ -1,3 +1,5 @@
+import { WidgetModel } from '@jupyter-widgets/base';
+import uuid4 from 'uuid/v4';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -32,6 +34,10 @@ function createComponentObject(model, parentView) {
     // eslint-disable-next-line no-new-func
     const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
+    const componentEntries = Object.entries(model.get('components') || {});
+    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
+
     return {
         data() {
             return { ...data, ...createDataMapping(model) };
@@ -41,7 +47,11 @@ function createComponentObject(model, parentView) {
         },
         watch: createWatches(model, parentView),
         methods: { ...methods, ...createMethods(model, parentView) },
-        components: createComponents(model.get('components') || {}, parentView),
+        components: {
+            ...createInstanceComponents(instanceComponents, parentView),
+            ...createClassComponents(classComponents, model, parentView),
+        },
+        computed: aliasRefProps(model),
         template: trimTemplateTags(model.get('template')),
     };
 }
@@ -89,11 +99,95 @@ function createMethods(model, parentView) {
     }, {});
 }
 
-function createComponents(components, parentView) {
-    return Object.entries(components)
-        .reduce((result, [name, model]) => {
-            // eslint-disable-next-line no-param-reassign
-            result[name] = createComponentObject(model, parentView);
-            return result;
-        }, {});
+function createInstanceComponents(components, parentView) {
+    return components.reduce((result, [name, model]) => {
+        // eslint-disable-next-line no-param-reassign
+        result[name] = createComponentObject(model, parentView);
+        return result;
+    }, {});
+}
+
+function createClassComponents(components, containerModel, parentView) {
+    return components.reduce((accumulator, [componentName, componentSpec]) => ({
+        ...accumulator,
+        [componentName]: ({
+            /* TODO: handle naming collisions. Ignore style traitlet for now */
+            props: componentSpec.props.filter(p => p !== 'style'),
+            data() {
+                return {
+                    model: null,
+                    id: uuid4(),
+                };
+            },
+            created() {
+                const fn = () => {
+                    if (!this.model) {
+                        const newModel = containerModel.get('_component_instances').find(wm => wm.model_id === this.id);
+                        if (newModel) {
+                            this.model = newModel;
+                        }
+                    } else {
+                        containerModel.off('change:_component_instances', fn);
+                    }
+                };
+                containerModel.on('change:_component_instances', fn);
+                containerModel.send(
+                    {
+                        create_widget: componentSpec.class, // eslint-disable-line camelcase
+                        id: this.id,
+                        props: this.$options.propsData,
+                    },
+                    containerModel.callbacks(parentView),
+                );
+            },
+            destroyed() {
+                containerModel.send(
+                    {
+                        destroy_widget: this.id, // eslint-disable-line camelcase
+                    },
+                    containerModel.callbacks(parentView),
+                );
+            },
+            watch: componentSpec.props.reduce((watchAccumulator, prop) => ({
+                ...watchAccumulator,
+                [prop](value) {
+                    if (value.objectRef) {
+                        containerModel.send(
+                            {
+                                update_ref: value, // eslint-disable-line camelcase
+                                prop,
+                                id: this.id,
+                            },
+                            containerModel.callbacks(parentView),
+                        );
+                    } else {
+                        this.model.set(prop, value);
+                        this.model.save_changes(this.model.callbacks(parentView));
+                    }
+                },
+            }), {}),
+            render(createElement) {
+                if (this.model) {
+                    return vueRender(createElement, this.model, parentView, {});
+                }
+                return createElement('div', ['temp-content']);
+            },
+        }),
+    }), {});
+}
+
+/* Returns a map with computed properties so that myProp_ref is available as myProp in the template
+ * (only if myProp does not exist).
+ */
+function aliasRefProps(model) {
+    return model.keys()
+        .filter(key => key.endsWith('_ref'))
+        .map(propRef => [propRef, propRef.substring(0, propRef.length - 4)])
+        .filter(([, prop]) => !model.keys().includes(prop))
+        .reduce((accumulator, [propRef, prop]) => ({
+            ...accumulator,
+            [prop]() {
+                return this[propRef];
+            },
+        }), {});
 }

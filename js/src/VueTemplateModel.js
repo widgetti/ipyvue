@@ -18,6 +18,7 @@ export class VueTemplateModel extends DOMWidgetModel {
                 methods: null,
                 data: null,
                 events: null,
+                _component_instances: null,
             },
         };
     }
@@ -26,4 +27,5 @@ export class VueTemplateModel extends DOMWidgetModel {
 VueTemplateModel.serializers = {
     ...DOMWidgetModel.serializers,
     components: { deserialize: unpack_models },
+    _component_instances: { deserialize: unpack_models },
 };
