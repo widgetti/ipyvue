@@ -79,14 +79,25 @@ function addModelListeners(model, vueModel) {
 
 function createWatches(model, parentView) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
-        .reduce((result, prop) => {
-            result[prop] = (value) => { // eslint-disable-line no-param-reassign
-                model.set(prop, value === undefined ? null : value);
-                model.save_changes(model.callbacks(parentView));
-            };
-            return result;
-        }, {});
+        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components', 'layout'].includes(prop))
+        .reduce((result, prop) => ({
+            ...result,
+            [prop]: {
+                handler: (value) => {
+                    let newValue;
+                    if (Array.isArray(value)) {
+                        newValue = [...value];
+                    } else if (typeof value === 'object') {
+                        newValue = {...value};
+                    } else {
+                        newValue = value;
+                    }
+                    model.set(prop, value === undefined ? null : newValue);
+                    model.save_changes(model.callbacks(parentView));
+                },
+                deep: true,
+            },
+        }), {});
 }
 
 function createMethods(model, parentView) {
