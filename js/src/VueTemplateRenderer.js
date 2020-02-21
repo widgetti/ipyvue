@@ -77,16 +77,41 @@ function addModelListeners(model, vueModel) {
         .forEach(prop => model.on(`change:${prop}`, () => { vueModel[prop] = model.get(prop); }));
 }
 
+function deepClone(value) {
+    if (Array.isArray(value)) {
+        return [...value.map(v => deepClone(v))];
+    }
+    if (typeof value === 'object') {
+        return Object.entries(value)
+            .map(([k, v]) => [k, deepClone(v)])
+            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+    }
+    return value;
+}
+
 function createWatches(model, parentView) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
-        .reduce((result, prop) => {
-            result[prop] = (value) => { // eslint-disable-line no-param-reassign
-                model.set(prop, value === undefined ? null : value);
-                model.save_changes(model.callbacks(parentView));
-            };
-            return result;
-        }, {});
+        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components', 'layout'].includes(prop))
+        .reduce((result, prop) => ({
+            ...result,
+            [prop]: {
+                handler: (value) => {
+                    const newValue = deepClone(value);
+
+                    /* Workaround for first change not being send over the websocket for yet unknown
+                     * reasons */
+                    if (!model.__next) {
+                        // eslint-disable-next-line no-param-reassign
+                        model.__next = true;
+                        model.set(prop, null);
+                    }
+
+                    model.set(prop, value === undefined ? null : newValue);
+                    model.save_changes(model.callbacks(parentView));
+                },
+                deep: true,
+            },
+        }), {});
 }
 
 function createMethods(model, parentView) {
