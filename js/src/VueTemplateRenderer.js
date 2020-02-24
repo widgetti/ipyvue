@@ -19,14 +19,33 @@ function createComponentObject(model, parentView) {
     if (!(model instanceof VueTemplateModel)) {
         return createObjectForNestedModel(model, parentView);
     }
-    if (model.get('css')) {
-        const style = document.createElement('style');
-        style.id = model.cid;
-        style.innerHTML = model.get('css');
-        document.head.appendChild(style);
-        parentView.once('remove', () => {
-            document.head.removeChild(style);
-        });
+
+    const vuefile = readVueFile(model.get('template'));
+
+    const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
+    const cssId = (vuefile.STYLE && vuefile.STYLE.id);
+
+    if (css) {
+        if (cssId) {
+            const prefixedCssId = `ipyvue-${cssId}`;
+            let style = document.getElementById(prefixedCssId);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = prefixedCssId;
+                document.head.appendChild(style);
+            }
+            if (style.innerHTML !== css) {
+                style.innerHTML = css;
+            }
+        } else {
+            const style = document.createElement('style');
+            style.id = model.cid;
+            style.innerHTML = css;
+            document.head.appendChild(style);
+            parentView.once('remove', () => {
+                document.head.removeChild(style);
+            });
+        }
     }
 
     // eslint-disable-next-line no-new-func
@@ -45,20 +64,20 @@ function createComponentObject(model, parentView) {
         created() {
             addModelListeners(model, this);
         },
-        watch: createWatches(model, parentView),
-        methods: { ...methods, ...createMethods(model, parentView) },
+        watch: { ...vuefile.SCRIPT && vuefile.SCRIPT.watch, ...createWatches(model, parentView) },
+        methods: {
+            ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
+            ...methods,
+            ...createMethods(model, parentView),
+        },
         components: {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
             ...createWidgetComponent(model, parentView),
         },
-        computed: aliasRefProps(model),
-        template: trimTemplateTags(model.get('template')),
+        computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
+        template: vuefile.TEMPLATE || model.get('template'),
     };
-}
-
-function trimTemplateTags(template) {
-    return template.replace(/^\s*<template>/ig, '').replace(/<\/template>\s*$/ig, '');
 }
 
 function createDataMapping(model) {
@@ -252,4 +271,37 @@ function createWidgetComponent(model, parentView) {
             },
         },
     };
+}
+
+function readVueFile(fileContent) {
+    const doc = document.implementation.createHTMLDocument('');
+
+    doc.body.innerHTML = fileContent;
+
+    const result = {};
+    [...doc.body.childNodes].forEach((node) => {
+        switch (node.nodeName) {
+            case 'TEMPLATE':
+                result[node.nodeName] = node.innerHTML;
+                break;
+            case 'SCRIPT': {
+                const str = node.textContent
+                    .substring(node.textContent.indexOf('{'), node.textContent.length)
+                    .replace('\n', ' ');
+
+                // eslint-disable-next-line no-new-func
+                result[node.nodeName] = Function(`return ${str}`)();
+                break;
+            }
+            case 'STYLE':
+                result[node.nodeName] = {
+                    content: node.innerText,
+                    id: node.id,
+                };
+                break;
+            default:
+                break;
+        }
+    });
+    return result;
 }
