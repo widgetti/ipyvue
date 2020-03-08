@@ -77,6 +77,18 @@ function addModelListeners(model, vueModel) {
         .forEach(prop => model.on(`change:${prop}`, () => { vueModel[prop] = model.get(prop); }));
 }
 
+function deepClone(value) {
+    if (Array.isArray(value)) {
+        return [...value.map(v => deepClone(v))];
+    }
+    if (typeof value === 'object') {
+        return Object.entries(value)
+            .map(([k, v]) => [k, deepClone(v)])
+            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+    }
+    return value;
+}
+
 function createWatches(model, parentView) {
     return model.keys()
         .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components', 'layout'].includes(prop))
@@ -84,14 +96,8 @@ function createWatches(model, parentView) {
             ...result,
             [prop]: {
                 handler: (value) => {
-                    let newValue;
-                    if (Array.isArray(value)) {
-                        newValue = [...value];
-                    } else if (typeof value === 'object') {
-                        newValue = {...value};
-                    } else {
-                        newValue = value;
-                    }
+                    const newValue = deepClone(value);
+                    console.log('watch', newValue);
                     model.set(prop, value === undefined ? null : newValue);
                     model.save_changes(model.callbacks(parentView));
                 },
