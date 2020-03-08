@@ -98,6 +98,15 @@ function createWatches(model, parentView) {
                 handler: (value) => {
                     const newValue = deepClone(value);
                     console.log('watch', newValue);
+
+                    /* Workaround for first change not being send over the websocket for yet unknown
+                     * reasons */
+                    if (!model.__next) {
+                        // eslint-disable-next-line no-param-reassign
+                        model.__next = true;
+                        model.set(prop, null);
+                    }
+
                     model.set(prop, value === undefined ? null : newValue);
                     model.save_changes(model.callbacks(parentView));
                 },
