@@ -57,12 +57,22 @@ function createComponentObject(model, parentView) {
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
 
+    function callVueFn(name, this_) {
+        if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
+            vuefile.SCRIPT[name].bind(this_)();
+        }
+    }
+
     return {
         data() {
             return { ...data, ...createDataMapping(model) };
         },
+        beforeCreate() {
+            callVueFn('beforeCreate', this);
+        },
         created() {
             addModelListeners(model, this);
+            callVueFn('created', this);
         },
         watch: { ...vuefile.SCRIPT && vuefile.SCRIPT.watch, ...createWatches(model, parentView) },
         methods: {
@@ -77,6 +87,24 @@ function createComponentObject(model, parentView) {
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE || model.get('template'),
+        beforeMount() {
+            callVueFn('beforeMount', this);
+        },
+        mounted() {
+            callVueFn('mounted', this);
+        },
+        beforeUpdate() {
+            callVueFn('beforeUpdate', this);
+        },
+        updated() {
+            callVueFn('updated', this);
+        },
+        beforeDestroy() {
+            callVueFn('beforeDestroy', this);
+        },
+        destroyed() {
+            callVueFn('destroyed', this);
+        },
     };
 }
 
