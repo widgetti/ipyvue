@@ -19,14 +19,33 @@ function createComponentObject(model, parentView) {
     if (!(model instanceof VueTemplateModel)) {
         return createObjectForNestedModel(model, parentView);
     }
-    if (model.get('css')) {
-        const style = document.createElement('style');
-        style.id = model.cid;
-        style.innerHTML = model.get('css');
-        document.head.appendChild(style);
-        parentView.once('remove', () => {
-            document.head.removeChild(style);
-        });
+
+    const vuefile = readVueFile(model.get('template'));
+
+    const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
+    const cssId = (vuefile.STYLE && vuefile.STYLE.id);
+
+    if (css) {
+        if (cssId) {
+            const prefixedCssId = `ipyvue-${cssId}`;
+            let style = document.getElementById(prefixedCssId);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = prefixedCssId;
+                document.head.appendChild(style);
+            }
+            if (style.innerHTML !== css) {
+                style.innerHTML = css;
+            }
+        } else {
+            const style = document.createElement('style');
+            style.id = model.cid;
+            style.innerHTML = css;
+            document.head.appendChild(style);
+            parentView.once('remove', () => {
+                document.head.removeChild(style);
+            });
+        }
     }
 
     // eslint-disable-next-line no-new-func
@@ -38,27 +57,55 @@ function createComponentObject(model, parentView) {
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
 
+    function callVueFn(name, this_) {
+        if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
+            vuefile.SCRIPT[name].bind(this_)();
+        }
+    }
+
     return {
         data() {
             return { ...data, ...createDataMapping(model) };
         },
+        beforeCreate() {
+            callVueFn('beforeCreate', this);
+        },
         created() {
             addModelListeners(model, this);
+            callVueFn('created', this);
         },
-        watch: createWatches(model, parentView),
-        methods: { ...methods, ...createMethods(model, parentView) },
+        watch: { ...vuefile.SCRIPT && vuefile.SCRIPT.watch, ...createWatches(model, parentView) },
+        methods: {
+            ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
+            ...methods,
+            ...createMethods(model, parentView),
+        },
         components: {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
             ...createWidgetComponent(model, parentView),
         },
-        computed: aliasRefProps(model),
-        template: trimTemplateTags(model.get('template')),
+        computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
+        template: vuefile.TEMPLATE || model.get('template'),
+        beforeMount() {
+            callVueFn('beforeMount', this);
+        },
+        mounted() {
+            callVueFn('mounted', this);
+        },
+        beforeUpdate() {
+            callVueFn('beforeUpdate', this);
+        },
+        updated() {
+            callVueFn('updated', this);
+        },
+        beforeDestroy() {
+            callVueFn('beforeDestroy', this);
+        },
+        destroyed() {
+            callVueFn('destroyed', this);
+        },
     };
-}
-
-function trimTemplateTags(template) {
-    return template.replace(/^\s*<template>/ig, '').replace(/<\/template>\s*$/ig, '');
 }
 
 function createDataMapping(model) {
@@ -77,16 +124,41 @@ function addModelListeners(model, vueModel) {
         .forEach(prop => model.on(`change:${prop}`, () => { vueModel[prop] = model.get(prop); }));
 }
 
+function deepClone(value) {
+    if (Array.isArray(value)) {
+        return [...value.map(v => deepClone(v))];
+    }
+    if (typeof value === 'object') {
+        return Object.entries(value)
+            .map(([k, v]) => [k, deepClone(v)])
+            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+    }
+    return value;
+}
+
 function createWatches(model, parentView) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
-        .reduce((result, prop) => {
-            result[prop] = (value) => { // eslint-disable-line no-param-reassign
-                model.set(prop, value === undefined ? null : value);
-                model.save_changes(model.callbacks(parentView));
-            };
-            return result;
-        }, {});
+        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components', 'layout'].includes(prop))
+        .reduce((result, prop) => ({
+            ...result,
+            [prop]: {
+                handler: (value) => {
+                    const newValue = deepClone(value);
+
+                    /* Workaround for first change not being send over the websocket for yet unknown
+                     * reasons */
+                    if (!model.__next) {
+                        // eslint-disable-next-line no-param-reassign
+                        model.__next = true;
+                        model.set(prop, null);
+                    }
+
+                    model.set(prop, value === undefined ? null : newValue);
+                    model.save_changes(model.callbacks(parentView));
+                },
+                deep: true,
+            },
+        }), {});
 }
 
 function createMethods(model, parentView) {
@@ -227,4 +299,37 @@ function createWidgetComponent(model, parentView) {
             },
         },
     };
+}
+
+function readVueFile(fileContent) {
+    const doc = document.implementation.createHTMLDocument('');
+
+    doc.body.innerHTML = fileContent;
+
+    const result = {};
+    [...doc.body.childNodes].forEach((node) => {
+        switch (node.nodeName) {
+            case 'TEMPLATE':
+                result[node.nodeName] = node.innerHTML;
+                break;
+            case 'SCRIPT': {
+                const str = node.textContent
+                    .substring(node.textContent.indexOf('{'), node.textContent.length)
+                    .replace('\n', ' ');
+
+                // eslint-disable-next-line no-new-func
+                result[node.nodeName] = Function(`return ${str}`)();
+                break;
+            }
+            case 'STYLE':
+                result[node.nodeName] = {
+                    content: node.innerText,
+                    id: node.id,
+                };
+                break;
+            default:
+                break;
+        }
+    });
+    return result;
 }
