@@ -4,6 +4,7 @@ import _ from 'lodash';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
+import httpVueLoader from './httpVueLoader';
 
 export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
@@ -56,7 +57,8 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
     function callVueFn(name, this_) {
         if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
@@ -85,6 +87,7 @@ function createComponentObject(model, parentView) {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
             ...createWidgetComponent(model, parentView),
+            ...createFullVueComponents(fullVueComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE || model.get('template'),
@@ -235,6 +238,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return createElement('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createFullVueComponents(components) {
+    return components.reduce((accumulator, [componentName, vueFile]) => ({
+        ...accumulator,
+        [componentName]: httpVueLoader(vueFile),
     }), {});
 }
 
