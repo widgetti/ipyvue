@@ -125,6 +125,9 @@ function addModelListeners(model, vueModel) {
 }
 
 function deepClone(value) {
+    if (value == null) {
+        return value;
+    }
     if (Array.isArray(value)) {
         return [...value.map(v => deepClone(v))];
     }
