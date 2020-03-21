@@ -2,6 +2,18 @@ import { DOMWidgetView } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import { vueRender } from './VueRenderer';
 
+export function createViewContext(view) {
+    return {
+        getModelById(modelId) {
+            return view.model.widget_manager.get_model(modelId);
+        },
+        /* TODO: refactor to abstract the direct use of WidgetView away */
+        getView() {
+            return view;
+        },
+    };
+}
+
 export class VueView extends DOMWidgetView {
     remove() {
         this.vueApp.$destroy();
@@ -16,6 +28,9 @@ export class VueView extends DOMWidgetView {
 
             this.vueApp = new Vue({
                 el: vueEl,
+                provide: {
+                    viewCtx: createViewContext(this),
+                },
                 render: createElement => vueRender(createElement, this.model, this, {}),
             });
         });

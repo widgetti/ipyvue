@@ -1,6 +1,7 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
+import Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -86,7 +87,6 @@ function createComponentObject(model, parentView) {
         components: {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
-            ...createWidgetComponent(model, parentView),
             ...createFullVueComponents(fullVueComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
@@ -264,42 +264,6 @@ function aliasRefProps(model) {
         }), {});
 }
 
-function createWidgetComponent(model, parentView) {
-    return {
-        'jupyter-widget': {
-            props: ['widget'],
-            data() {
-                return {
-                    component: null,
-                };
-            },
-            created() {
-                this.update();
-            },
-            watch: {
-                widget() {
-                    this.update();
-                },
-            },
-            methods: {
-                update() {
-                    model.widget_manager
-                        .get_model(this.widget.substring(10))
-                        .then((mdl) => {
-                            this.component = createComponentObject(mdl, parentView);
-                        });
-                },
-            },
-            render(createElement) {
-                if (!this.component) {
-                    return createElement('div');
-                }
-                return createElement(this.component);
-            },
-        },
-    };
-}
-
 function readVueFile(fileContent) {
     const doc = document.implementation.createHTMLDocument('');
 
@@ -332,3 +296,36 @@ function readVueFile(fileContent) {
     });
     return result;
 }
+
+Vue.component('jupyter-widget', {
+    props: ['widget'],
+    inject: ['viewCtx'],
+    data() {
+        return {
+            component: null,
+        };
+    },
+    created() {
+        this.update();
+    },
+    watch: {
+        widget() {
+            this.update();
+        },
+    },
+    methods: {
+        update() {
+            this.viewCtx
+                .getModelById(this.widget.substring(10))
+                .then((mdl) => {
+                    this.component = createComponentObject(mdl, this.viewCtx.getView());
+                });
+        },
+    },
+    render(createElement) {
+        if (!this.component) {
+            return createElement('div');
+        }
+        return createElement(this.component);
+    },
+});
