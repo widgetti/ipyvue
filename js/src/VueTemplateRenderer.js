@@ -146,6 +146,11 @@ function createWatches(model, parentView) {
             ...result,
             [prop]: {
                 handler: (value) => {
+                    /* Don't send changes received from backend back */
+                    if (JSON.stringify(value) === JSON.stringify(model.get(prop))) {
+                        return;
+                    }
+
                     const newValue = deepClone(value);
 
                     /* Workaround for first change not being send over the websocket for yet unknown
