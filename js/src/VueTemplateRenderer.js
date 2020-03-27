@@ -112,7 +112,7 @@ function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
         .reduce((result, prop) => {
-            result[prop] = model.get(prop); // eslint-disable-line no-param-reassign
+            result[prop] = deepClone(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
@@ -121,22 +121,20 @@ function addModelListeners(model, vueModel) {
     model.keys()
         .filter(prop => !prop.startsWith('_') && !['v_model', 'components'].includes(prop))
         // eslint-disable-next-line no-param-reassign
-        .forEach(prop => model.on(`change:${prop}`, () => { vueModel[prop] = model.get(prop); }));
+        .forEach(prop => model.on(`change:${prop}`, () => {
+            if (deepEquals(model.get(prop), vueModel[prop])) {
+                return;
+            }
+            vueModel[prop] = deepClone(model.get(prop));
+        }));
 }
 
 function deepClone(value) {
-    if (value == null) {
-        return value;
-    }
-    if (Array.isArray(value)) {
-        return [...value.map(v => deepClone(v))];
-    }
-    if (typeof value === 'object') {
-        return Object.entries(value)
-            .map(([k, v]) => [k, deepClone(v)])
-            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
-    }
-    return value;
+    return JSON.parse(JSON.stringify(value));
+}
+
+function deepEquals(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function createWatches(model, parentView) {
@@ -147,7 +145,7 @@ function createWatches(model, parentView) {
             [prop]: {
                 handler: (value) => {
                     /* Don't send changes received from backend back */
-                    if (JSON.stringify(value) === JSON.stringify(model.get(prop))) {
+                    if (deepEquals(value, model.get(prop))) {
                         return;
                     }
 
@@ -160,7 +158,6 @@ function createWatches(model, parentView) {
                         model.__next = true;
                         model.set(prop, null);
                     }
-
                     model.set(prop, value === undefined ? null : newValue);
                     model.save_changes(model.callbacks(parentView));
                 },
