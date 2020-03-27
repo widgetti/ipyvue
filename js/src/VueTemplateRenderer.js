@@ -1,5 +1,6 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
+import _ from 'lodash';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -112,7 +113,7 @@ function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
         .reduce((result, prop) => {
-            result[prop] = deepClone(model.get(prop)); // eslint-disable-line no-param-reassign
+            result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
@@ -122,19 +123,11 @@ function addModelListeners(model, vueModel) {
         .filter(prop => !prop.startsWith('_') && !['v_model', 'components'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
-            if (deepEquals(model.get(prop), vueModel[prop])) {
+            if (_.isEqual(model.get(prop), vueModel[prop])) {
                 return;
             }
-            vueModel[prop] = deepClone(model.get(prop));
+            vueModel[prop] = _.cloneDeep(model.get(prop));
         }));
-}
-
-function deepClone(value) {
-    return JSON.parse(JSON.stringify(value));
-}
-
-function deepEquals(a, b) {
-    return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function createWatches(model, parentView) {
@@ -145,11 +138,11 @@ function createWatches(model, parentView) {
             [prop]: {
                 handler: (value) => {
                     /* Don't send changes received from backend back */
-                    if (deepEquals(value, model.get(prop))) {
+                    if (_.isEqual(value, model.get(prop))) {
                         return;
                     }
 
-                    const newValue = deepClone(value);
+                    const newValue = _.cloneDeep(value);
 
                     /* Workaround for first change not being send over the websocket for yet unknown
                      * reasons */
