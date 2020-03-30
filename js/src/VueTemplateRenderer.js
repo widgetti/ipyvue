@@ -1,9 +1,11 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
+import Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
+import httpVueLoader from './httpVueLoader';
 
 export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
@@ -56,7 +58,8 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel));
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
     function callVueFn(name, this_) {
         if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
@@ -84,7 +87,7 @@ function createComponentObject(model, parentView) {
         components: {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
-            ...createWidgetComponent(model, parentView),
+            ...createFullVueComponents(fullVueComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE || model.get('template'),
@@ -238,6 +241,13 @@ function createClassComponents(components, containerModel, parentView) {
     }), {});
 }
 
+function createFullVueComponents(components) {
+    return components.reduce((accumulator, [componentName, vueFile]) => ({
+        ...accumulator,
+        [componentName]: httpVueLoader(vueFile),
+    }), {});
+}
+
 /* Returns a map with computed properties so that myProp_ref is available as myProp in the template
  * (only if myProp does not exist).
  */
@@ -252,42 +262,6 @@ function aliasRefProps(model) {
                 return this[propRef];
             },
         }), {});
-}
-
-function createWidgetComponent(model, parentView) {
-    return {
-        'jupyter-widget': {
-            props: ['widget'],
-            data() {
-                return {
-                    component: null,
-                };
-            },
-            created() {
-                this.update();
-            },
-            watch: {
-                widget() {
-                    this.update();
-                },
-            },
-            methods: {
-                update() {
-                    model.widget_manager
-                        .get_model(this.widget.substring(10))
-                        .then((mdl) => {
-                            this.component = createComponentObject(mdl, parentView);
-                        });
-                },
-            },
-            render(createElement) {
-                if (!this.component) {
-                    return createElement('div');
-                }
-                return createElement(this.component);
-            },
-        },
-    };
 }
 
 function readVueFile(fileContent) {
@@ -322,3 +296,36 @@ function readVueFile(fileContent) {
     });
     return result;
 }
+
+Vue.component('jupyter-widget', {
+    props: ['widget'],
+    inject: ['viewCtx'],
+    data() {
+        return {
+            component: null,
+        };
+    },
+    created() {
+        this.update();
+    },
+    watch: {
+        widget() {
+            this.update();
+        },
+    },
+    methods: {
+        update() {
+            this.viewCtx
+                .getModelById(this.widget.substring(10))
+                .then((mdl) => {
+                    this.component = createComponentObject(mdl, this.viewCtx.getView());
+                });
+        },
+    },
+    render(createElement) {
+        if (!this.component) {
+            return createElement('div');
+        }
+        return createElement(this.component);
+    },
+});

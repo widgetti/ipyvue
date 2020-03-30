@@ -1,7 +1,7 @@
 export { default as Vue } from 'vue';
 export { VueModel } from './VueModel';
 export { VueTemplateModel } from './VueTemplateModel';
-export { VueView } from './VueView';
+export { VueView, createViewContext } from './VueView';
 export { HtmlModel } from './Html';
 export { ForceLoadModel } from './ForceLoad';
 export { vueRender } from './VueRenderer';
