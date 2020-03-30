@@ -1,5 +1,6 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
+import _ from 'lodash';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -112,7 +113,7 @@ function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
         .reduce((result, prop) => {
-            result[prop] = model.get(prop); // eslint-disable-line no-param-reassign
+            result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
@@ -121,22 +122,12 @@ function addModelListeners(model, vueModel) {
     model.keys()
         .filter(prop => !prop.startsWith('_') && !['v_model', 'components'].includes(prop))
         // eslint-disable-next-line no-param-reassign
-        .forEach(prop => model.on(`change:${prop}`, () => { vueModel[prop] = model.get(prop); }));
-}
-
-function deepClone(value) {
-    if (value == null) {
-        return value;
-    }
-    if (Array.isArray(value)) {
-        return [...value.map(v => deepClone(v))];
-    }
-    if (typeof value === 'object') {
-        return Object.entries(value)
-            .map(([k, v]) => [k, deepClone(v)])
-            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
-    }
-    return value;
+        .forEach(prop => model.on(`change:${prop}`, () => {
+            if (_.isEqual(model.get(prop), vueModel[prop])) {
+                return;
+            }
+            vueModel[prop] = _.cloneDeep(model.get(prop));
+        }));
 }
 
 function createWatches(model, parentView) {
@@ -146,17 +137,12 @@ function createWatches(model, parentView) {
             ...result,
             [prop]: {
                 handler: (value) => {
-                    const newValue = deepClone(value);
-
-                    /* Workaround for first change not being send over the websocket for yet unknown
-                     * reasons */
-                    if (!model.__next) {
-                        // eslint-disable-next-line no-param-reassign
-                        model.__next = true;
-                        model.set(prop, null);
+                    /* Don't send changes received from backend back */
+                    if (_.isEqual(value, model.get(prop))) {
+                        return;
                     }
 
-                    model.set(prop, value === undefined ? null : newValue);
+                    model.set(prop, value === undefined ? null : _.cloneDeep(value));
                     model.save_changes(model.callbacks(parentView));
                 },
                 deep: true,
