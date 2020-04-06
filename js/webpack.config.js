@@ -34,7 +34,7 @@ module.exports = [
             libraryTarget: 'amd'
         },
         devtool: 'source-map',
-        externals: ['@jupyter-widgets/base', 'vue', '@mariobuikhuizen/vue-compiler-addon'],
+        externals: ['@jupyter-widgets/base', 'vue'],
         mode: 'production',
         performance: {
             maxEntrypointSize: 1400000,
@@ -53,7 +53,7 @@ module.exports = [
             publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/'
         },
         devtool: 'source-map',
-        externals: ['@jupyter-widgets/base', 'vue', '@mariobuikhuizen/vue-compiler-addon'],
+        externals: ['@jupyter-widgets/base', 'vue'],
         mode: 'production',
         performance: {
             maxEntrypointSize: 1400000,

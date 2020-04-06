@@ -2,6 +2,7 @@ import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
 import Vue from 'vue';
+import { parseComponent } from '@mariobuikhuizen/vue-compiler-addon';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -265,35 +266,27 @@ function aliasRefProps(model) {
 }
 
 function readVueFile(fileContent) {
-    const doc = document.implementation.createHTMLDocument('');
-
-    doc.body.innerHTML = fileContent;
-
+    const component = parseComponent(fileContent, { pad: 'line' });
     const result = {};
-    [...doc.body.childNodes].forEach((node) => {
-        switch (node.nodeName) {
-            case 'TEMPLATE':
-                result[node.nodeName] = node.innerHTML;
-                break;
-            case 'SCRIPT': {
-                const str = node.textContent
-                    .substring(node.textContent.indexOf('{'), node.textContent.length)
-                    .replace('\n', ' ');
 
-                // eslint-disable-next-line no-new-func
-                result[node.nodeName] = Function(`return ${str}`)();
-                break;
-            }
-            case 'STYLE':
-                result[node.nodeName] = {
-                    content: node.innerText,
-                    id: node.id,
-                };
-                break;
-            default:
-                break;
-        }
-    });
+    if (component.template) {
+        result.TEMPLATE = component.template.content;
+    }
+    if (component.script) {
+        const { content } = component.script;
+        const str = content
+            .substring(content.indexOf('{'), content.length)
+            .replace('\n', ' ');
+
+        // eslint-disable-next-line no-new-func
+        result.SCRIPT = Function(`return ${str}`)();
+    }
+    if (component.styles && component.styles.length > 0) {
+        const { content } = component.styles[0];
+        const { id } = component.styles[0].attrs;
+        result.STYLE = { content, id };
+    }
+
     return result;
 }
 
