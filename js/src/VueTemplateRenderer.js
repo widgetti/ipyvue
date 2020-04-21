@@ -115,7 +115,8 @@ function createComponentObject(model, parentView) {
 
 function createDataMapping(model) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components'].includes(prop))
+        .filter(prop => !prop.startsWith('_')
+            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
             result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
@@ -124,7 +125,8 @@ function createDataMapping(model) {
 
 function addModelListeners(model, vueModel) {
     model.keys()
-        .filter(prop => !prop.startsWith('_') && !['v_model', 'components'].includes(prop))
+        .filter(prop => !prop.startsWith('_')
+            && !['v_model', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
             if (_.isEqual(model.get(prop), vueModel[prop])) {
@@ -136,7 +138,8 @@ function addModelListeners(model, vueModel) {
 
 function createWatches(model, parentView) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_') && !['events', 'template', 'components', 'layout'].includes(prop))
+        .filter(prop => !prop.startsWith('_')
+            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => ({
             ...result,
             [prop]: {
