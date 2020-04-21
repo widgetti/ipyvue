@@ -79,7 +79,7 @@ function createComponentObject(model, parentView) {
             addModelListeners(model, this);
             callVueFn('created', this);
         },
-        watch: { ...vuefile.SCRIPT && vuefile.SCRIPT.watch, ...createWatches(model, parentView) },
+        watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
         methods: {
             ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
             ...methods,
@@ -136,14 +136,17 @@ function addModelListeners(model, vueModel) {
         }));
 }
 
-function createWatches(model, parentView) {
+function createWatches(model, parentView, templateWatchers) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
             && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => ({
             ...result,
             [prop]: {
-                handler: (value) => {
+                handler(value) {
+                    if (templateWatchers && templateWatchers[prop]) {
+                        templateWatchers[prop].bind(this)(value);
+                    }
                     /* Don't send changes received from backend back */
                     if (_.isEqual(value, model.get(prop))) {
                         return;
