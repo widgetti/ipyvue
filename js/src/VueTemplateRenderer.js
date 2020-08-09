@@ -134,6 +134,20 @@ function addModelListeners(model, vueModel) {
             }
             vueModel[prop] = _.cloneDeep(model.get(prop));
         }));
+    model.on('msg:custom', (content, buffers) => {
+        if (!content['method']) {
+            return;
+        }
+        const jupyter_method = 'jupyter_' + content['method'];
+        if (!vueModel[jupyter_method]) {
+            return;
+        }
+        let args_ = content['args']
+        if ( args_ == null) {
+            args_ = []
+        }
+        vueModel[jupyter_method](...args_, buffers);
+    });
 }
 
 function createWatches(model, parentView, templateWatchers) {
