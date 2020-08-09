@@ -163,10 +163,21 @@ function createWatches(model, parentView, templateWatchers) {
 function createMethods(model, parentView) {
     return model.get('events').reduce((result, event) => {
         // eslint-disable-next-line no-param-reassign
-        result[event] = value => model.send(
-            { event, data: eventToObject(value) },
-            model.callbacks(parentView),
-        );
+        result[event] = (value, buffers) => {
+            if (buffers) {
+                const validBuffers = buffers instanceof Array &&
+                    buffers[0] instanceof ArrayBuffer;
+                if (!validBuffers) {
+                    console.warn('second argument is not an BufferArray[View] array')
+                    buffers = undefined;
+                }
+            }
+            model.send(
+                {event, data: eventToObject(value)},
+                model.callbacks(parentView),
+                buffers,
+            );
+        }
         return result;
     }, {});
 }

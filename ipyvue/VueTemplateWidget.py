@@ -47,7 +47,10 @@ class Events(object):
         elif 'event' in content.keys():
             event = content.get("event", "")
             data = content.get("data", {})
-            getattr(self, 'vue_' + event)(data)
+            if buffers:
+                getattr(self, 'vue_' + event)(data, buffers)
+            else:
+                getattr(self, 'vue_' + event)(data)
 
 
 def _value_to_json(x, obj):
