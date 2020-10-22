@@ -112,7 +112,7 @@ class VueTemplate(DOMWidget, Events):
 
     data = Unicode(None, allow_none=True).tag(sync=True)
 
-    events = List(Unicode(), default_value=None, allow_none=True).tag(sync=True)
+    events = List(Unicode(), allow_none=True).tag(sync=True)
 
     components = Dict(default_value=None, allow_none=True).tag(
         sync=True, **class_component_serialization)

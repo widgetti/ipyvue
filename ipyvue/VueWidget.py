@@ -57,11 +57,11 @@ class VueWidget(DOMWidget, Events):
     children = List(Union([
         Instance(DOMWidget),
         Unicode()
-    ], default_value=None)).tag(sync=True, **widget_serialization)
+    ])).tag(sync=True, **widget_serialization)
 
     slot = Unicode(None, allow_none=True).tag(sync=True)
 
-    _events = List(Unicode(), default_value=None, allow_none=True).tag(sync=True)
+    _events = List(Unicode()).tag(sync=True)
 
     v_model = Any('!!disabled!!', allow_none=True).tag(sync=True)
 
