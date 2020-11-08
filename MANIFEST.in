@@ -1,3 +1,4 @@
 include LICENSE
-recursive-include ipyvue/static *.*
+recursive-include ipyvue/nbextension *.*
+recursive-include ipyvue/labextension *.*
 include jupyter-vue.json

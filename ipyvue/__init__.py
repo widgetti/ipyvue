@@ -7,10 +7,17 @@ from .VueComponentRegistry import (VueComponent, register_component_from_string,
     register_component_from_file)  # noqa: F401
 
 
+def _jupyter_labextension_paths():
+    return [{
+        'src': 'labextension',
+        'dest': 'jupyter-vue',
+    }]
+
+
 def _jupyter_nbextension_paths():
     return [{
         'section': 'notebook',
-        'src': 'static',
+        'src': 'nbextension',
         'dest': 'jupyter-vue',
         'require': 'jupyter-vue/extension'
     }]

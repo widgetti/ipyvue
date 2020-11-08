@@ -6,7 +6,7 @@ module.exports = [
         entry: './lib/extension.js',
         output: {
             filename: 'extension.js',
-            path: path.resolve(__dirname, '..', 'ipyvue', 'static'),
+            path: path.resolve(__dirname, '..', 'ipyvue', 'nbextension'),
             libraryTarget: 'amd'
         },
         mode: 'production',
@@ -15,7 +15,7 @@ module.exports = [
         entry: './lib/index.js',
         output: {
             filename: 'index.js',
-            path: path.resolve(__dirname, '..', 'ipyvue', 'static'),
+            path: path.resolve(__dirname, '..', 'ipyvue', 'nbextension'),
             libraryTarget: 'amd'
         },
         devtool: 'source-map',
@@ -30,7 +30,7 @@ module.exports = [
         entry: './lib/nodeps.js',
         output: {
             filename: 'nodeps.js',
-            path: path.resolve(__dirname, '..', 'ipyvue', 'static'),
+            path: path.resolve(__dirname, '..', 'ipyvue', 'nbextension'),
             libraryTarget: 'amd'
         },
         devtool: 'source-map',
