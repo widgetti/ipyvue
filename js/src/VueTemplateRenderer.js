@@ -76,6 +76,10 @@ function createComponentObject(model, parentView) {
             callVueFn('beforeCreate', this);
         },
         created() {
+            this.__onTemplateChange = () => {
+                this.$root.$forceUpdate();
+            }
+            model.on('change:template', this.__onTemplateChange)
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -105,6 +109,7 @@ function createComponentObject(model, parentView) {
             callVueFn('updated', this);
         },
         beforeDestroy() {
+            model.off('change:template', this.__onTemplateChange)
             callVueFn('beforeDestroy', this);
         },
         destroyed() {
