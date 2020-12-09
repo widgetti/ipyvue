@@ -1,6 +1,9 @@
-from traitlets import Any, Unicode, List, Dict
+import os
+from traitlets import Any, Unicode, List, Dict, Union, Instance
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
+
+from .Template import Template, get_template
 from ._version import semver
 from .ForceLoad import force_load_instance
 import inspect
@@ -8,6 +11,7 @@ from importlib import import_module
 
 OBJECT_REF = 'objectRef'
 FUNCTION_REF = 'functionRef'
+
 
 class Events(object):
     def __init__(self, **kwargs):
@@ -104,7 +108,9 @@ class VueTemplate(DOMWidget, Events):
 
     _model_module_version = Unicode(semver).tag(sync=True)
 
-    template = Unicode(None, allow_none=True).tag(sync=True)
+    template = Union([
+        Instance(Template),
+        Unicode()]).tag(sync=True, **widget_serialization)
 
     css = Unicode(None, allow_none=True).tag(sync=True)
 
@@ -119,7 +125,19 @@ class VueTemplate(DOMWidget, Events):
 
     _component_instances = List().tag(sync=True, **widget_serialization)
 
+    template_file = None
+
     def __init__(self, *args, **kwargs):
+        if self.template_file:
+            abs_path = ''
+            if type(self.template_file) == str:
+                abs_path = os.path.abspath(self.template_file)
+            elif type(self.template_file) == tuple:
+                rel_file, path = self.template_file
+                abs_path = os.path.join(os.path.dirname(rel_file), path)
+
+            self.template = get_template(abs_path)
+
         super().__init__(*args, **kwargs)
 
         sync_ref_traitlets = [v for k, v in self.traits().items()

@@ -7,6 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
+import { TemplateModel } from './Template';
 
 export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
@@ -24,7 +25,10 @@ function createComponentObject(model, parentView) {
         return createObjectForNestedModel(model, parentView);
     }
 
-    const vuefile = readVueFile(model.get('template'));
+    const isTemplateModel = model.get('template') instanceof TemplateModel;
+    const templateModel = isTemplateModel ? model.get('template') : model;
+    const template = templateModel.get('template');
+    const vuefile = readVueFile(template);
 
     const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
     const cssId = (vuefile.STYLE && vuefile.STYLE.id);
@@ -78,8 +82,8 @@ function createComponentObject(model, parentView) {
         created() {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
-            }
-            model.on('change:template', this.__onTemplateChange)
+            };
+            templateModel.on('change:template', this.__onTemplateChange);
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -95,7 +99,7 @@ function createComponentObject(model, parentView) {
             ...createFullVueComponents(fullVueComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
-        template: vuefile.TEMPLATE || model.get('template'),
+        template: vuefile.TEMPLATE || template,
         beforeMount() {
             callVueFn('beforeMount', this);
         },
@@ -109,7 +113,7 @@ function createComponentObject(model, parentView) {
             callVueFn('updated', this);
         },
         beforeDestroy() {
-            model.off('change:template', this.__onTemplateChange)
+            templateModel.off('change:template', this.__onTemplateChange);
             callVueFn('beforeDestroy', this);
         },
         destroyed() {

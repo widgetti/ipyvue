@@ -26,6 +26,7 @@ export class VueTemplateModel extends DOMWidgetModel {
 
 VueTemplateModel.serializers = {
     ...DOMWidgetModel.serializers,
+    template: { deserialize: unpack_models },
     components: { deserialize: unpack_models },
     _component_instances: { deserialize: unpack_models },
 };
