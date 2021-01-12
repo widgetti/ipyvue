@@ -29,7 +29,10 @@ LONG_DESCRIPTION = 'Jupyter widgets base for Vue libraries'
 def get_data_files():
     tgz = 'jupyter-vue-' + version_ns['__version__'] + '.tgz'
     return [
-        ('share/jupyter/nbextensions/jupyter-vue', glob.glob('ipyvue/static/*')),
+        ('share/jupyter/nbextensions/jupyter-vue', glob.glob('ipyvue/nbextension/*')),
+        ('share/jupyter/labextensions/jupyter-vue', glob.glob('ipyvue/labextension/package.json')),
+        ('share/jupyter/labextensions/jupyter-vue/static',
+         glob.glob('ipyvue/labextension/static/*')),
         ('etc/jupyter/nbconfig/notebook.d', ['jupyter-vue.json']),
         ('share/jupyter/lab/extensions', ['js/' + tgz])
     ]
@@ -78,8 +81,8 @@ class NPM(Command):
     node_modules = os.path.join(node_root, 'node_modules')
 
     targets = [
-        os.path.join(here, 'ipyvue', 'static', 'extension.js'),
-        os.path.join(here, 'ipyvue', 'static', 'index.js')
+        os.path.join(here, 'ipyvue', 'nbextension', 'extension.js'),
+        os.path.join(here, 'ipyvue', 'nbextension', 'index.js')
     ]
 
     def initialize_options(self):
