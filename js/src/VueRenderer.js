@@ -1,9 +1,12 @@
 /* eslint camelcase: ['error', {allow: ['v_model']}] */
-import { JupyterPhosphorWidget } from '@jupyter-widgets/base';
+import * as base from '@jupyter-widgets/base';
 import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
+
 import Vue from './VueWithCompiler';
+
+const JupyterPhosphorWidget = base.JupyterPhosphorWidget || base.JupyterLuminoWidget;
 
 export function createObjectForNestedModel(model, parentView) {
     return {
