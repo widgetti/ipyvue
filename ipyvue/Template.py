@@ -6,10 +6,13 @@ from ._version import semver
 template_registry = {}
 
 
-def watch(path=''):
+def watch(path=None):
     import logging
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
+
+    if path is None:
+        path = os.path.abspath('.')
 
     log = logging.getLogger('ipyvue')
     class VueEventHandler(FileSystemEventHandler):
