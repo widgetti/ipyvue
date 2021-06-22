@@ -34,7 +34,9 @@ def get_template(abs_path):
         with open(abs_path) as f:
             tw = Template(template=f.read())
             template_registry[abs_path] = tw
-
+    else:
+        with open(abs_path) as f:
+            template_registry[abs_path].template = f.read()
     return template_registry[abs_path]
 
 
