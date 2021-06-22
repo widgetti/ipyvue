@@ -23,3 +23,4 @@ For a development installation (requires npm),
     $ pip install -e .
     $ jupyter nbextension install --py --symlink --sys-prefix ipyvue
     $ jupyter nbextension enable --py --sys-prefix ipyvue
+    $ jupyter labextension develop . --overwrite
