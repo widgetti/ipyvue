@@ -150,5 +150,19 @@ class VueWidget(DOMWidget, Events):
         self.class_list = ClassList(self)
         
         super().__init__(**kwargs)
+        
+    def show(self):
+        """remove the d-none class"""
+        
+        self.class_list.remove('d-none')
+        
+        return self
+    
+    def hide(self):
+        """add the d-none class"""
+        
+        self.class_list.add('d-none')
+        
+        return self
     
 __all__ = ['VueWidget']
