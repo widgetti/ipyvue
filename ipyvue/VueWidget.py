@@ -69,8 +69,6 @@ class ClassList:
         
         dst_classes = [dst if c == src else c for c in src_classes]
         
-        final_str = ' '.join(tmp_class_list)
-        
         self.obj.class_ = ' '.join(dst_classes)
         
         return
