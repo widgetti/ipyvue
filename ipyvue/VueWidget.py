@@ -1,10 +1,80 @@
-from traitlets import (Unicode, Instance, Union, List, Any, Dict)
-from ipywidgets import DOMWidget
+from traitlets import (HasTraits, Unicode, Instance, Union, List, Any, Dict)
+from ipywidgets import DOMWidget, link
 from ipywidgets.widgets.widget import (widget_serialization, CallbackDispatcher)
 from ._version import semver
 from .ForceLoad import force_load_instance
 
-
+class ClassList:
+    
+    def __init__(self, obj):
+        self.obj = obj
+        
+    def remove(self, *classes):
+        """
+        Remove class elements from the class_ trait of the linked object. 
+        Use coma separated str class names.
+        """
+        
+        classes = [str(c) for c in classes]
+        
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes = [c for c in src_classes if c not in classes]
+        
+        self.obj.class_ = ' '.join(dst_classes)
+        
+        return
+        
+    def add(self, *classes):
+        """
+        add class elements to the class_ trait of the linked object. 
+        Use coma separated str class names.
+        """
+        
+        classes = [str(c) for c in classes]
+        
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes =  src_classes + [c for c in classes if c not in src_classes]
+        
+        self.obj.class_ = ' '.join(dst_classes)
+        
+        return
+    
+    def toggle(self, *classes):
+        """
+        toggle class elements to the class_ trait of the linked object. 
+        Use coma separated str class names.
+        """
+        
+        classes = [str(c) for c in classes]
+        
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes = (
+            [c for c in src_classes if c not in classes] 
+            + [c for c in classes if c not in src_classes]
+        )
+        
+        self.obj.class_ = ' '.join(dst_classes)
+        
+        return
+    
+    def replace(self, src, dst):
+        """
+        Replace class element by another in the class_ trait of the linked object. 
+        Args: (source, destination). If the source is not found nothing is done.
+        """
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        
+        src = str(src)
+        dst = str(dst)
+        
+        dst_classes = [dst if c == src else c for c in src_classes]
+        
+        final_str = ' '.join(tmp_class_list)
+        
+        self.obj.class_ = ' '.join(dst_classes)
+        
+        return
+        
 class Events(object):
     def __init__(self, **kwargs):
         self._event_handlers_map = {}
@@ -73,7 +143,12 @@ class VueWidget(DOMWidget, Events):
 
     v_slots = List(Dict()).tag(sync=True, **widget_serialization)
 
-    v_on = Unicode(None, allow_none=True).tag(sync=True)
-
-
+    v_on = Unicode(None, allow_none=True).tag(sync=True)            
+    
+    def __init__(self, **kwargs):
+        
+        self.class_list = ClassList(self)
+        
+        super().__init__(**kwargs)
+    
 __all__ = ['VueWidget']
