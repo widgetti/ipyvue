@@ -1,9 +1,7 @@
-import unittest
-
 from ipyvue import VueWidget
 
 
-class TestVueWidget(unittest.TestCase):
+class TestVueWidget():
 
     CLASS = "tutu"
     CLASS_LIST = ["tutu", "toto"]
@@ -13,13 +11,13 @@ class TestVueWidget(unittest.TestCase):
         # empty widget
         test_widget = VueWidget()
         test_widget.class_list.add(*self.CLASS_LIST)
-        self.assertEqual(test_widget.class_, " ".join(self.CLASS_LIST))
+        assert test_widget.class_ == " ".join(self.CLASS_LIST)
 
         # with duplicate
         test_widget = VueWidget()
         test_widget.class_ = self.CLASS
         test_widget.class_list.add(*self.CLASS_LIST)
-        self.assertEqual(test_widget.class_, " ".join(self.CLASS_LIST))
+        assert test_widget.class_ == " ".join(self.CLASS_LIST)
 
         return
 
@@ -29,12 +27,12 @@ class TestVueWidget(unittest.TestCase):
         test_widget = VueWidget()
         test_widget.class_ = ' '.join(self.CLASS_LIST)
         test_widget.class_list.remove(self.CLASS)
-        self.assertEqual(test_widget.class_, self.CLASS_LIST[1])
+        assert test_widget.class_ == self.CLASS_LIST[1]
 
         # not existing
         test_widget = VueWidget()
         test_widget.class_list.remove(*self.CLASS_LIST)
-        self.assertEqual(test_widget.class_, "")
+        assert test_widget.class_ == ""
 
         return
 
@@ -43,7 +41,7 @@ class TestVueWidget(unittest.TestCase):
         test_widget = VueWidget()
         test_widget.class_ = self.CLASS
         test_widget.class_list.toggle(*self.CLASS_LIST)
-        self.assertEqual(test_widget.class_, self.CLASS_LIST[1])
+        assert test_widget.class_ == self.CLASS_LIST[1]
 
         return
 
@@ -52,7 +50,7 @@ class TestVueWidget(unittest.TestCase):
         test_widget = VueWidget()
         test_widget.class_ = self.CLASS
         test_widget.class_list.replace(*self.CLASS_LIST)
-        self.assertEqual(test_widget.class_, self.CLASS_LIST[1])
+        assert test_widget.class_ == self.CLASS_LIST[1]
 
         return
 
@@ -60,7 +58,7 @@ class TestVueWidget(unittest.TestCase):
 
         test_widget = VueWidget()
         test_widget.hide()
-        self.assertIn("d-none", test_widget.class_)
+        assert "d-none" in test_widget.class_
 
         return
 
@@ -69,6 +67,6 @@ class TestVueWidget(unittest.TestCase):
         test_widget = VueWidget()
         test_widget.class_list.add(self.CLASS, "d-none")
         test_widget.show()
-        self.assertNotIn("d-none", test_widget.class_)
+        assert "d-none" not in test_widget.class_
 
         return
