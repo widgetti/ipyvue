@@ -161,14 +161,12 @@ class VueWidget(DOMWidget, Events):
 
         self.class_list.remove("d-none")
 
-        return self
 
     def hide(self):
         """Make the widget invisible"""
 
         self.class_list.add("d-none")
 
-        return self
 
 
 __all__ = ["VueWidget"]
