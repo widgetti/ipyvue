@@ -12,7 +12,8 @@ class ClassList:
     def remove(self, *classes):
         """
         Remove class elements from the class_ trait of the linked object.
-        Use coma separated str class names.
+        
+        :param *classes (str): The classes to remove
         """
 
         classes = [str(c) for c in classes]
@@ -27,6 +28,8 @@ class ClassList:
         """
         add class elements to the class_ trait of the linked object.
         Use coma separated str class names.
+        
+        :param *classes (str): The classes to add
         """
 
         classes = [str(c) for c in classes]
@@ -40,7 +43,8 @@ class ClassList:
     def toggle(self, *classes):
         """
         toggle class elements to the class_ trait of the linked object.
-        Use coma separated str class names.
+        
+        :param *classes (str): The classes to toggle
         """
 
         classes = [str(c) for c in classes]
@@ -56,7 +60,8 @@ class ClassList:
     def replace(self, src, dst):
         """
         Replace class element by another in the class_ trait of the linked object.
-        Args: (source, destination). If the source is not found nothing is done.
+        
+        :param (source, destination). If the source is not found nothing is done.
         """
         src_classes = self.obj.class_.split() if self.obj.class_ else []
 
@@ -152,14 +157,14 @@ class VueWidget(DOMWidget, Events):
         super().__init__(**kwargs)
 
     def show(self):
-        """remove the d-none class"""
+        """Make the widget visible"""
 
         self.class_list.remove("d-none")
 
         return self
 
     def hide(self):
-        """add the d-none class"""
+        """Make the widget invisible"""
 
         self.class_list.add("d-none")
 
