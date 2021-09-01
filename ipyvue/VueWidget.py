@@ -1,5 +1,5 @@
-from traitlets import HasTraits, Unicode, Instance, Union, List, Any, Dict
-from ipywidgets import DOMWidget, link
+from traitlets import Unicode, Instance, Union, List, Any, Dict
+from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization, CallbackDispatcher
 from ._version import semver
 from .ForceLoad import force_load_instance
