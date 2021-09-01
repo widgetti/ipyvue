@@ -21,8 +21,7 @@ class ClassList:
         dst_classes = [c for c in src_classes if c not in classes]
 
         self.obj.class_ = " ".join(dst_classes)
-
-        return
+        
 
     def add(self, *classes):
         """
@@ -37,7 +36,6 @@ class ClassList:
 
         self.obj.class_ = " ".join(dst_classes)
 
-        return
 
     def toggle(self, *classes):
         """
@@ -54,7 +52,6 @@ class ClassList:
 
         self.obj.class_ = " ".join(dst_classes)
 
-        return
 
     def replace(self, src, dst):
         """
@@ -70,7 +67,6 @@ class ClassList:
 
         self.obj.class_ = " ".join(dst_classes)
 
-        return
 
 
 class Events(object):
