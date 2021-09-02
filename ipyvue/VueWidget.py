@@ -27,7 +27,6 @@ class ClassList:
     def add(self, *classes):
         """
         add class elements to the class_ trait of the linked object.
-        Use coma separated str class names.
         
         :param *classes (str): The classes to add
         """
