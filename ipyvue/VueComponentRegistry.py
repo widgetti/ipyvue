@@ -4,8 +4,8 @@ from ._version import semver
 
 
 class VueComponent(DOMWidget):
-    _model_name = Unicode('VueComponentModel').tag(sync=True)
-    _model_module = Unicode('jupyter-vue').tag(sync=True)
+    _model_name = Unicode("VueComponentModel").tag(sync=True)
+    _model_module = Unicode("jupyter-vue").tag(sync=True)
     _model_module_version = Unicode(semver).tag(sync=True)
 
     name = Unicode().tag(sync=True)
@@ -31,4 +31,8 @@ def register_component_from_file(self, name, file_name):
         register_component_from_string(name, f.read())
 
 
-__all__ = ['VueComponent', 'register_component_from_string', 'register_component_from_file']
+__all__ = [
+    "VueComponent",
+    "register_component_from_string",
+    "register_component_from_file",
+]
