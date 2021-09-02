@@ -1,0 +1,21 @@
+#!/bin/bash
+
+TMP_DIR=/tmp/pre_commit_ipyvue
+rm -rf $TMP_DIR
+mkdir -p $TMP_DIR
+
+# Only check staged changes
+git checkout-index -a --prefix="${TMP_DIR}/"
+
+TARGETS=(ipyvue tests setup.py)
+
+(cd $TMP_DIR &&
+  (black "${TARGETS[@]}" --check\
+    || (echo "run: $(tput bold)black ${TARGETS[@]}$(tput sgr0) to fix" && exit 1))\
+  && flake8 "${TARGETS[@]}"
+)
+exit_code=$?
+
+rm -rf $TMP_DIR
+
+exit $exit_code
