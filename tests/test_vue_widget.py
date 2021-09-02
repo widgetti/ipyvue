@@ -18,8 +18,7 @@ class TestVueWidget():
         test_widget.class_ = self.CLASS
         test_widget.class_list.add(*self.CLASS_LIST)
         assert test_widget.class_ == " ".join(self.CLASS_LIST)
-
-        return
+        
 
     def test_remove_class(self):
 
@@ -33,8 +32,7 @@ class TestVueWidget():
         test_widget = VueWidget()
         test_widget.class_list.remove(*self.CLASS_LIST)
         assert test_widget.class_ == ""
-
-        return
+        
 
     def test_toggle_class(self):
 
@@ -43,7 +41,6 @@ class TestVueWidget():
         test_widget.class_list.toggle(*self.CLASS_LIST)
         assert test_widget.class_ == self.CLASS_LIST[1]
 
-        return
 
     def test_replace_class(self):
 
@@ -52,7 +49,6 @@ class TestVueWidget():
         test_widget.class_list.replace(*self.CLASS_LIST)
         assert test_widget.class_ == self.CLASS_LIST[1]
 
-        return
 
     def test_hide(self):
 
@@ -60,7 +56,6 @@ class TestVueWidget():
         test_widget.hide()
         assert "d-none" in test_widget.class_
 
-        return
 
     def test_show(self):
 
@@ -68,5 +63,3 @@ class TestVueWidget():
         test_widget.class_list.add(self.CLASS, "d-none")
         test_widget.show()
         assert "d-none" not in test_widget.class_
-
-        return
