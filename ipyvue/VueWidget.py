@@ -4,6 +4,72 @@ from ipywidgets.widgets.widget import (widget_serialization, CallbackDispatcher)
 from ._version import semver
 from .ForceLoad import force_load_instance
 
+class ClassList:
+    def __init__(self, obj):
+        self.obj = obj
+
+    def remove(self, *classes):
+        """
+        Remove class elements from the class_ trait of the linked object.
+        
+        :param *classes (str): The classes to remove
+        """
+
+        classes = [str(c) for c in classes]
+
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes = [c for c in src_classes if c not in classes]
+
+        self.obj.class_ = " ".join(dst_classes)
+        
+
+    def add(self, *classes):
+        """
+        add class elements to the class_ trait of the linked object.
+        
+        :param *classes (str): The classes to add
+        """
+
+        classes = [str(c) for c in classes]
+
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes = src_classes + [c for c in classes if c not in src_classes]
+
+        self.obj.class_ = " ".join(dst_classes)
+
+
+    def toggle(self, *classes):
+        """
+        toggle class elements to the class_ trait of the linked object.
+        
+        :param *classes (str): The classes to toggle
+        """
+
+        classes = [str(c) for c in classes]
+
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+        dst_classes = [c for c in src_classes if c not in classes] + [
+            c for c in classes if c not in src_classes
+        ]
+
+        self.obj.class_ = " ".join(dst_classes)
+
+
+    def replace(self, src, dst):
+        """
+        Replace class element by another in the class_ trait of the linked object.
+        
+        :param (source, destination). If the source is not found nothing is done.
+        """
+        src_classes = self.obj.class_.split() if self.obj.class_ else []
+
+        src = str(src)
+        dst = str(dst)
+
+        dst_classes = [dst if c == src else c for c in src_classes]
+
+        self.obj.class_ = " ".join(dst_classes)
+
 
 class Events(object):
     def __init__(self, **kwargs):
@@ -74,6 +140,25 @@ class VueWidget(DOMWidget, Events):
     v_slots = List(Dict()).tag(sync=True, **widget_serialization)
 
     v_on = Unicode(None, allow_none=True).tag(sync=True)
+    
+    
+    def __init__(self, **kwargs):
+
+        self.class_list = ClassList(self)
+
+        super().__init__(**kwargs)
+
+        
+    def show(self):
+        """Make the widget visible"""
+
+        self.class_list.remove("d-none")
+
+
+    def hide(self):
+        """Make the widget invisible"""
+
+        self.class_list.add("d-none")
 
 
 __all__ = ['VueWidget']
