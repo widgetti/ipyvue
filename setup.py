@@ -2,6 +2,7 @@ from __future__ import print_function
 from setuptools import setup, find_packages, Command
 from setuptools.command.sdist import sdist
 from setuptools.command.build_py import build_py
+from setuptools.command.develop import develop
 from setuptools.command.egg_info import egg_info
 from subprocess import check_call, CalledProcessError
 from distutils import log
@@ -132,6 +133,12 @@ class NPM(Command):
         update_package_data(self.distribution)
 
 
+class DevelopCmd(develop):
+    def run(self):
+        check_call(['pre-commit', 'install'])
+        super(DevelopCmd, self).run()
+
+
 version_ns = {}
 with open(os.path.join(here, 'ipyvue', '_version.py')) as f:
     exec(f.read(), {}, version_ns)
@@ -146,6 +153,11 @@ setup_args = {
     'install_requires': [
         'ipywidgets>=7.0.0',
     ],
+    'extras_require': {
+        'dev': [
+            'pre-commit',
+        ]
+    },
     'packages': find_packages(),
     'zip_safe': False,
     'cmdclass': {
@@ -153,6 +165,7 @@ setup_args = {
         'egg_info': js_prerelease(egg_info),
         'sdist': js_prerelease(sdist, strict=True),
         'jsdeps': NPM,
+        'develop': DevelopCmd,
     },
 
     'author': 'Mario Buikhuizen, Maarten Breddels',
