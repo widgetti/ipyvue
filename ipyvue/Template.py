@@ -8,7 +8,7 @@ from ._version import semver
 template_registry = {}
 
 
-def watch(path=""):
+def watch(paths=""):
     import logging
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
@@ -29,9 +29,15 @@ def watch(path=""):
                     register_component_from_file(name, event.src_path)
 
     observer = Observer()
-    path = os.path.normpath(path)
-    log.info(f"watching {path}")
-    observer.schedule(VueEventHandler(), path, recursive=True)
+
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    for path in paths:
+        path = os.path.normpath(path)
+        log.info(f"watching {path}")
+        observer.schedule(VueEventHandler(), path, recursive=True)
+
     observer.start()
 
 
