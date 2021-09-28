@@ -20,7 +20,7 @@ For a development installation (requires npm),
 
     $ git clone https://github.com/mariobuikhuizen/ipyvue.git
     $ cd ipyvue
-    $ pip install -e .
+    $ pip install -e ".[dev]"
     $ jupyter nbextension install --py --symlink --sys-prefix ipyvue
     $ jupyter nbextension enable --py --sys-prefix ipyvue
     $ jupyter labextension develop . --overwrite
