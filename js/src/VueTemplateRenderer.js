@@ -73,6 +73,7 @@ function createComponentObject(model, parentView) {
     }
 
     return {
+        inject: ['viewCtx'],
         data() {
             return { ...data, ...createDataMapping(model) };
         },
