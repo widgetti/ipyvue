@@ -101,7 +101,7 @@ function createAttrsMapping(model) {
     return model.keys()
         .filter(useAsAttr)
         .reduce((result, key) => {
-            result[key.replace(/_/g, '-')] = model.get(key); // eslint-disable-line no-param-reassign
+            result[key.replace(/_$/g, '').replace(/_/g, '-')] = model.get(key); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
