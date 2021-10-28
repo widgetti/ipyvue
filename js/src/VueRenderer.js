@@ -62,11 +62,13 @@ export function vueRender(createElement, model, parentView, slotScopes) {
             addListeners(model, this);
         },
         render(createElement2) {
-            return createElement2(
+            const element = createElement2(
                 tag,
                 createContent(createElement2, model, this, parentView, slotScopes),
                 renderChildren(createElement2, model.get('children'), this, parentView, slotScopes),
             );
+            updateCache(this);
+            return element;
         },
     }, { ...model.get('slot') && { slot: model.get('slot') } });
 
@@ -226,10 +228,15 @@ function renderChildren(createElement, children, vueModel, parentView, slotScope
     if (!vueModel.childCache) {
         vueModel.childCache = {}; // eslint-disable-line no-param-reassign
     }
+    if (!vueModel.childIds) {
+        vueModel.childIds = []; // eslint-disable-line no-param-reassign
+    }
     const childViewModels = children.map((child) => {
         if (typeof (child) === 'string') {
             return child;
         }
+        vueModel.childIds.push(child.cid);
+
         if (vueModel.childCache[child.cid]) {
             return vueModel.childCache[child.cid];
         }
@@ -238,11 +245,13 @@ function renderChildren(createElement, children, vueModel, parentView, slotScope
         return vm;
     });
 
-    /* Remove unused components */
-    const childIds = children.map(child => child.cid);
+    return childViewModels;
+}
+
+function updateCache(vueModel) {
     Object.keys(vueModel.childCache)
-        .filter(key => !childIds.includes(key))
+        .filter(key => !vueModel.childIds.includes(key))
         // eslint-disable-next-line no-param-reassign
         .forEach(key => delete vueModel.childCache[key]);
-    return childViewModels;
+    vueModel.childIds = []; // eslint-disable-line no-param-reassign
 }
