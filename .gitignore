@@ -11,3 +11,6 @@ ipyvue/labextension/
 ipyvue/nbextension/
 js/lib
 js/jupyter-vue-*.tgz
+
+# coverage 
+.coverage
