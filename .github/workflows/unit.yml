@@ -1,0 +1,30 @@
+name: Build
+
+on: 
+  - push
+  - pull_request
+  - workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r .github/requirements.txt
+      - name: Test formatting
+        uses: psf/black@stable
+      - name: Setup flake8 annotations
+        uses: rbialon/flake8-annotations@v1
+      - name: test with pytest
+        run: coverage run -m pytest --color=yes tests
+      

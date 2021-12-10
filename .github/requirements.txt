@@ -1,0 +1,4 @@
+jupyterlab
+ipywidgets>=7.0.0
+pytest
+coverage
