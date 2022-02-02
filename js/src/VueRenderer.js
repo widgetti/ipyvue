@@ -1,5 +1,5 @@
 /* eslint camelcase: ['error', {allow: ['v_model']}] */
-import { JupyterPhosphorWidget, JupyterLuminoWidget } from '@jupyter-widgets/base';
+import { JupyterPhosphorWidget } from '@jupyter-widgets/base';
 import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
@@ -10,14 +10,7 @@ export function createObjectForNestedModel(model, parentView) {
         mounted() {
             parentView
                 .create_child_view(model)
-                .then(view => {
-                    if (JupyterPhosphorWidget) {
-                        /* backward compatability for jupyter-widgets < 8.0 */
-                        JupyterPhosphorWidget.attach(view.pWidget, this.$el)
-                    } else {
-                        JupyterLuminoWidget.attach(view.luminoWidget, this.$el)
-                    }
-                });
+                .then(view => JupyterPhosphorWidget.attach(view.pWidget, this.$el));
         },
         render(createElement) {
             return createElement('div', { style: { height: '100%' } });
