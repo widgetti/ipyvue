@@ -1,11 +1,12 @@
-from traitlets import Unicode, Instance, Union, List, Any, Dict
 from ipywidgets import DOMWidget
-from ipywidgets.widgets.widget_layout import Layout
-from ipywidgets.widgets.widget import widget_serialization, CallbackDispatcher
 from ipywidgets.widgets.trait_types import InstanceDict
+from ipywidgets.widgets.widget import CallbackDispatcher, widget_serialization
+from ipywidgets.widgets.widget_layout import Layout
+from traitlets import Any, Dict, Instance, List, Unicode, Union, default
 
 from ._version import semver
-from .ForceLoad import force_load_instance
+from .ForceLoad import ForceLoad
+from .util import singleton
 
 
 class ClassList:
@@ -138,9 +139,17 @@ class VueWidget(DOMWidget, Events):
 
     # Force the loading of jupyter-vue before dependent extensions when in a static
     # context (embed, voila)
-    _jupyter_vue = Any(force_load_instance, read_only=True).tag(
+    # this happens when e.g. jupyter-vuedraggable requires jupyter-vue, but it is not
+    # loaded yet (via a widget creation). This does not trigger the library loading
+    # via the widget manager, but straight through requirejs
+
+    _jupyter_vue = Instance(ForceLoad, read_only=True).tag(
         sync=True, **widget_serialization
     )
+
+    @default("_jupyter_vue")
+    def _default_jupyter_vue(self):
+        return singleton(ForceLoad)
 
     _model_name = Unicode("VueModel").tag(sync=True)
 
