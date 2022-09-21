@@ -5,6 +5,7 @@ module.exports = {
     id: 'jupyter-vue',
     requires: [base.IJupyterWidgetRegistry],
     activate(app, widgets) {
+        window.jupyterVue = jupyterVue;
         widgets.registerWidget({
             name: 'jupyter-vue',
             version: jupyterVue.version,
