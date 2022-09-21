@@ -1,6 +1,9 @@
 from traitlets import Unicode, Instance, Union, List, Any, Dict
 from ipywidgets import DOMWidget
+from ipywidgets.widgets.widget_layout import Layout
 from ipywidgets.widgets.widget import widget_serialization, CallbackDispatcher
+from ipywidgets.widgets.trait_types import InstanceDict
+
 from ._version import semver
 from .ForceLoad import force_load_instance
 
@@ -106,6 +109,11 @@ class Events(object):
 
 
 class VueWidget(DOMWidget, Events):
+    # we can drop this when https://github.com/jupyter-widgets/ipywidgets/pull/3592
+    # is merged
+    layout = InstanceDict(Layout, allow_none=True).tag(
+        sync=True, **widget_serialization
+    )
 
     # Force the loading of jupyter-vue before dependent extensions when in a static
     # context (embed, voila)
