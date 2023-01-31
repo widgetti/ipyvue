@@ -75,7 +75,9 @@ function createComponentObject(model, parentView) {
     return {
         inject: ['viewCtx'],
         data() {
-            return { ...data, ...createDataMapping(model) };
+            // data that is only used in the template, and not synced with the backend/model
+            const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
+            return { ...data, ...dataTemplate, ...createDataMapping(model) };
         },
         beforeCreate() {
             callVueFn('beforeCreate', this);
