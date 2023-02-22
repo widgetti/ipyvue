@@ -6,11 +6,35 @@ import { VueTemplateModel } from './VueTemplateModel';
 import Vue from './VueWithCompiler';
 
 export function createObjectForNestedModel(model, parentView) {
+    let currentView =  null;
+    let destroyed = false;
     return {
         mounted() {
             parentView
                 .create_child_view(model)
-                .then(view => JupyterPhosphorWidget.attach(view.pWidget, this.$el));
+                .then(view => {
+                    currentView = view;
+                    // since create view is async, the vue component might be destroyed before the view is created
+                    if(!destroyed) {
+                        JupyterPhosphorWidget.attach(view.pWidget, this.$el);
+                    } else {
+                        currentView.remove();
+                    }
+                });
+        },
+        beforeDestroy() {
+            if (currentView) {
+                // In vue 3 we can use the beforeUnmount, which is called before the node is removed from the DOM
+                // In vue 2, we are already disconnected from the document at this stage, which phosphor does not like.
+                // In order to avoid an error in phosphor, we add the node to the body before removing it.
+                // (current.remove triggers a phosphor detach)
+                // To be sure we do not cause any flickering, we hide the node before moving it.
+                currentView.pWidget.node.style.display = "none";
+                document.body.appendChild(currentView.pWidget.node)
+                currentView.remove();
+            } else {
+                destroyed = true;
+            }
         },
         render(createElement) {
             return createElement('div', { style: { height: '100%' } });
