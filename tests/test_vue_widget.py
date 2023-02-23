@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from ipyvue import VueWidget
 
 
@@ -58,3 +60,20 @@ class TestVueWidget:
         test_widget.class_list.add(self.CLASS, "d-none")
         test_widget.show()
         assert "d-none" not in test_widget.class_
+
+
+def test_event_handling():
+    event_handler = MagicMock()
+    button = VueWidget()
+    button.on_event("click.stop", event_handler)
+    button.fire_event("click.stop", {"foo": "bar"})
+    event_handler.assert_called_once_with(button, "click.stop", {"foo": "bar"})
+
+    event_handler.reset_mock()
+    button.click({"foo": "bar"})
+    event_handler.assert_called_once_with(button, "click.stop", {"foo": "bar"})
+
+    # test the code path as if it's coming from the frontend
+    event_handler.reset_mock()
+    button._handle_event(None, dict(event="click.stop", data={"foo": "bar"}), [])
+    event_handler.assert_called_once_with(button, "click.stop", {"foo": "bar"})
