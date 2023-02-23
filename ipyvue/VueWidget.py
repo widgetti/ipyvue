@@ -96,8 +96,12 @@ class Events(object):
         if len(difference) != 0:
             self._events = list(self._event_handlers_map.keys())
 
-    def fire_event(self, event, data):
-        self._event_handlers_map[event](self, event, data)
+    def fire_event(self, event, data=None):
+        """Manually trigger an event handler on the Python side."""
+        dispatcher = self._event_handlers_map[event]
+        # we don't call via the dispatcher, since that eats exceptions
+        for callback in dispatcher.callbacks:
+            callback(self, event, data or {})
 
     def _handle_event(self, _, content, buffers):
         event = content.get("event", "")
