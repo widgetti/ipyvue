@@ -21,8 +21,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: pip install -r .github/requirements.txt
-      - name: Test formatting
-        uses: psf/black@stable
+      - name: Run black
+        run: black .
       - name: Setup flake8 annotations
         uses: rbialon/flake8-annotations@v1
       - name: test with pytest

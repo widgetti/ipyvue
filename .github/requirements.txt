@@ -2,3 +2,4 @@ jupyterlab
 ipywidgets>=7.0.0
 pytest
 coverage
+black==22.8.0
