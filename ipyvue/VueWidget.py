@@ -96,13 +96,34 @@ class Events(object):
         if len(difference) != 0:
             self._events = list(self._event_handlers_map.keys())
 
-    def fire_event(self, event, data):
-        self._event_handlers_map[event](self, event, data)
+    def fire_event(self, event, data=None):
+        """Manually trigger an event handler on the Python side."""
+        # note that a click event will trigger click.stop if that particular
+        # event+modifier is registered.
+        event_match = [k for k in self._event_handlers_map.keys() if k.startswith(event)]
+        if not event_match:
+            raise ValueError(f"'{event}' not found in widget {self}")
+
+        self._fire_event(event_match[0], data)
+
+    def click(self, data=None):
+        """Manually triggers the event handler for the 'click' event
+
+        Note that this does not trigger a click event in the browser, this only
+        invokes the Python event handlers.
+        """
+        self.fire_event("click", data or {})
+
+    def _fire_event(self, event, data=None):
+        dispatcher = self._event_handlers_map[event]
+        # we don't call via the dispatcher, since that eats exceptions
+        for callback in dispatcher.callbacks:
+            callback(self, event, data or {})
 
     def _handle_event(self, _, content, buffers):
         event = content.get("event", "")
         data = content.get("data", {})
-        self.fire_event(event, data)
+        self._fire_event(event, data)
 
 
 class VueWidget(DOMWidget, Events):
