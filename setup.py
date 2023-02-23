@@ -1,15 +1,17 @@
 from __future__ import print_function
-from setuptools import setup, find_packages, Command
-from setuptools.command.sdist import sdist
+
+import glob
+import os
+import platform
+import sys
+from distutils import log
+from subprocess import CalledProcessError, check_call
+
+from setuptools import Command, find_packages, setup
 from setuptools.command.build_py import build_py
 from setuptools.command.develop import develop
 from setuptools.command.egg_info import egg_info
-from subprocess import check_call, CalledProcessError
-from distutils import log
-import os
-import sys
-import platform
-import glob
+from setuptools.command.sdist import sdist
 
 here = os.path.dirname(os.path.abspath(__file__))
 node_root = os.path.join(here, "js")
@@ -166,39 +168,39 @@ version_ns = {}
 with open(os.path.join(here, "ipyvue", "_version.py")) as f:
     exec(f.read(), {}, version_ns)
 
-setup_args = {
-    "name": "ipyvue",
-    "version": version_ns["__version__"],
-    "description": "Jupyter widgets base for Vue libraries",
-    "long_description": LONG_DESCRIPTION,
-    "include_package_data": True,
-    "data_files": get_data_files(),
-    "install_requires": [
+setup(
+    name="ipyvue",
+    version=version_ns["__version__"],
+    description="Jupyter widgets base for Vue libraries",
+    long_description=LONG_DESCRIPTION,
+    include_package_data=True,
+    data_files=get_data_files(),
+    install_requires=[
         "ipywidgets>=7.0.0",
     ],
-    "extras_require": {
+    extras_require={
         "dev": [
             "pre-commit",
         ]
     },
-    "packages": find_packages(),
-    "zip_safe": False,
-    "cmdclass": {
+    packages=find_packages(),
+    zip_safe=False,
+    cmdclass={
         "build_py": js_prerelease(build_py),
         "egg_info": js_prerelease(egg_info),
         "sdist": js_prerelease(sdist, strict=True),
         "jsdeps": NPM,
         "develop": DevelopCmd,
     },
-    "author": "Mario Buikhuizen, Maarten Breddels",
-    "author_email": "mbuikhuizen@gmail.com, maartenbreddels@gmail.com",
-    "url": "https://github.com/mariobuikhuizen/ipyvue",
-    "keywords": [
+    author="Mario Buikhuizen, Maarten Breddels",
+    author_email="mbuikhuizen@gmail.com, maartenbreddels@gmail.com",
+    url="https://github.com/widgetto/ipyvue",
+    keywords=[
         "ipython",
         "jupyter",
         "widgets",
     ],
-    "classifiers": [
+    classifiers=[
         "Development Status :: 4 - Beta",
         "Framework :: IPython",
         "Intended Audience :: Developers",
@@ -212,6 +214,4 @@ setup_args = {
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
     ],
-}
-
-setup(**setup_args)
+)
