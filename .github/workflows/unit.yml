@@ -21,10 +21,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: pip install -r .github/requirements.txt
+      - name: Install playwright browsers
+        if: matrix.python-version != '3.6'
+        run: playwright install chromium
       - name: Run black
         run: black .
       - name: Setup flake8 annotations
         uses: rbialon/flake8-annotations@v1
       - name: test with pytest
+        if: matrix.python-version != '3.6'
+        run: coverage run -m pytest --color=yes tests --video=retain-on-failure
+      - name: test with pytest
+        if: matrix.python-version == '3.6'
         run: coverage run -m pytest --color=yes tests
-      
+      - name: Upload Test artifacts
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: test-results

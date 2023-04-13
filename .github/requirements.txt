@@ -1,5 +1,10 @@
 jupyterlab
-ipywidgets>=7.0.0
+ipywidgets
 pytest
 coverage
 black==22.8.0
+solara[pytest]
+playwright; python_version > '3.6'
+pytest-playwright; python_version > '3.6'
+voila
+# sanity check
