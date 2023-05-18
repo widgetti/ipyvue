@@ -179,9 +179,12 @@ setup(
         "ipywidgets>=7.0.0",
     ],
     extras_require={
+        "test": [
+            "solara[pytest]",
+        ],
         "dev": [
             "pre-commit",
-        ]
+        ],
     },
     packages=find_packages(),
     zip_safe=False,
