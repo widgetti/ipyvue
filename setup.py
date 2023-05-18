@@ -186,7 +186,7 @@ setup(
             "pre-commit",
         ],
     },
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests", "tests.*"]),
     zip_safe=False,
     cmdclass={
         "build_py": js_prerelease(build_py),
