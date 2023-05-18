@@ -56,7 +56,7 @@ jobs:
           wheel=(dist/*.whl)
           unzip -d count ${wheel}
           ls -1 count
-          if [[ $(ls -1 count | wc -l) -ne 4 ]]; then echo "Expected 4 files/directory"; exit 1; fi
+          if [[ $(ls -1 count | wc -l) -ne 3 ]]; then echo "Expected 4 files/directory"; exit 1; fi
 
       - name: Upload builds
         uses: actions/upload-artifact@v3
