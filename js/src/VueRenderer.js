@@ -1,9 +1,11 @@
 /* eslint camelcase: ['error', {allow: ['v_model']}] */
-import { JupyterPhosphorWidget } from '@jupyter-widgets/base';
+import * as base from '@jupyter-widgets/base';
 import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import Vue from './VueWithCompiler';
+
+const JupyterPhosphorWidget = base.JupyterPhosphorWidget || base.JupyterLuminoWidget;
 
 export function createObjectForNestedModel(model, parentView) {
     let currentView =  null;
@@ -16,7 +18,13 @@ export function createObjectForNestedModel(model, parentView) {
                     currentView = view;
                     // since create view is async, the vue component might be destroyed before the view is created
                     if(!destroyed) {
-                        JupyterPhosphorWidget.attach(view.pWidget, this.$el);
+                        if(JupyterPhosphorWidget && (view.pWidget || view.luminoWidget || view.lmWidget)) {
+                            JupyterPhosphorWidget.attach(view.pWidget || view.luminoWidget || view.lmWidget, this.$el);
+                        } else {
+                            console.error("Could not attach widget to DOM using Lumino or Phosphor. Fallback to normal DOM attach", JupyterPhosphorWidget, view.pWidget, view.luminoWidget, view.lmWidget);
+                            this.$el.appendChild(view.el);
+
+                        }
                     } else {
                         currentView.remove();
                     }
@@ -29,8 +37,9 @@ export function createObjectForNestedModel(model, parentView) {
                 // In order to avoid an error in phosphor, we add the node to the body before removing it.
                 // (current.remove triggers a phosphor detach)
                 // To be sure we do not cause any flickering, we hide the node before moving it.
-                currentView.pWidget.node.style.display = "none";
-                document.body.appendChild(currentView.pWidget.node)
+                const widget = currentView.pWidget || currentView.luminoWidget || currentView.lmWidget;
+                widget.node.style.display = "none";
+                document.body.appendChild(widget.node)
                 currentView.remove();
             } else {
                 destroyed = true;
