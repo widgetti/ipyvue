@@ -443,7 +443,7 @@ httpVueLoader.langProcessor = {
 
 httpVueLoader.scriptExportsHandler = identity;
 
-export default function httpVueLoader(componentString) {
+export default function httpVueLoader(componentString : string) {
 
     return httpVueLoader.load(componentString);
 }

@@ -1,7 +1,7 @@
-import { WidgetModel } from '@jupyter-widgets/base';
+import { WidgetModel, WidgetView } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
-import Vue from 'vue';
+import Vue, {VueConstructor} from 'vue';
 import { parseComponent } from '@mariobuikhuizen/vue-compiler-addon';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
@@ -13,7 +13,27 @@ export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
 }
 
-function createComponentObject(model, parentView) {
+// TODO: this doesn't seem the right type
+interface ComponentObject extends VueConstructor<Vue> {
+    inject: string[];
+    data: () => any;
+    // lifecycle hooks
+    beforeCreate?(): void;
+    created?(): void;
+    beforeMount?(): void;
+    mounted?(): void;
+    beforeUpdate?(): void;
+    updated?(): void;
+    beforeDestroy?(): void;
+    destroyed?(): void;
+    watch: any;
+    methods: any;
+    components: any;
+    computed: any;
+    __onTemplateChange: () => void | null;
+}
+
+function createComponentObject(model : WidgetModel, parentView : WidgetView) : ComponentObject {
     if (model instanceof VueModel) {
         return {
             render(createElement) {
@@ -66,7 +86,7 @@ function createComponentObject(model, parentView) {
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
-    function callVueFn(name, this_) {
+    function callVueFn(name : string, this_ : any) {
         if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
             vuefile.SCRIPT[name].bind(this_)();
         }
@@ -125,17 +145,18 @@ function createComponentObject(model, parentView) {
     };
 }
 
-function createDataMapping(model) {
+function createDataMapping(model : WidgetModel) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
             && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
+            //@ts-ignore
             result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
 
-function addModelListeners(model, vueModel) {
+function addModelListeners(model : WidgetModel, vueModel : any) {
     model.keys()
         .filter(prop => !prop.startsWith('_')
             && !['v_model', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
@@ -162,14 +183,14 @@ function addModelListeners(model, vueModel) {
     });
 }
 
-function createWatches(model, parentView, templateWatchers) {
+function createWatches(model : WidgetModel, parentView : WidgetView, templateWatchers : any) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
             && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => ({
             ...result,
             [prop]: {
-                handler(value) {
+                handler(value : any) {
                     if (templateWatchers && templateWatchers[prop]) {
                         templateWatchers[prop].bind(this)(value);
                     }
@@ -186,10 +207,10 @@ function createWatches(model, parentView, templateWatchers) {
         }), {});
 }
 
-function createMethods(model, parentView) {
-    return model.get('events').reduce((result, event) => {
+function createMethods(model : WidgetModel, parentView : WidgetView) {
+    return model.get('events').reduce((result : any, event : any) => {
         // eslint-disable-next-line no-param-reassign
-        result[event] = (value, buffers) => {
+        result[event] = (value : any, buffers : any) => {
             if (buffers) {
                 const validBuffers = buffers instanceof Array &&
                     buffers[0] instanceof ArrayBuffer;
@@ -208,15 +229,15 @@ function createMethods(model, parentView) {
     }, {});
 }
 
-function createInstanceComponents(components, parentView) {
-    return components.reduce((result, [name, model]) => {
-        // eslint-disable-next-line no-param-reassign
+function createInstanceComponents(components : [string, WidgetModel][], parentView : WidgetView) {
+    return components.reduce((result : [string, any][], [name, model]) => {
+        //@ts-ignore
         result[name] = createComponentObject(model, parentView);
         return result;
-    }, {});
+    }, {} as [string, any][]);
 }
 
-function createClassComponents(components, containerModel, parentView) {
+function createClassComponents(components  : [string, string][], containerModel : WidgetModel, parentView : WidgetView) {
     return components.reduce((accumulator, [componentName, componentSpec]) => ({
         ...accumulator,
         [componentName]: ({
@@ -285,7 +306,7 @@ function createClassComponents(components, containerModel, parentView) {
     }), {});
 }
 
-function createFullVueComponents(components) {
+function createFullVueComponents(components : [string, string][]) {
     return components.reduce((accumulator, [componentName, vueFile]) => ({
         ...accumulator,
         [componentName]: httpVueLoader(vueFile),
@@ -295,7 +316,7 @@ function createFullVueComponents(components) {
 /* Returns a map with computed properties so that myProp_ref is available as myProp in the template
  * (only if myProp does not exist).
  */
-function aliasRefProps(model) {
+function aliasRefProps(model : WidgetModel) {
     return model.keys()
         .filter(key => key.endsWith('_ref'))
         .map(propRef => [propRef, propRef.substring(0, propRef.length - 4)])
@@ -303,14 +324,25 @@ function aliasRefProps(model) {
         .reduce((accumulator, [propRef, prop]) => ({
             ...accumulator,
             [prop]() {
+                //@ts-ignore
                 return this[propRef];
             },
         }), {});
 }
 
-function readVueFile(fileContent) {
+interface VueFileContent {
+    TEMPLATE?: string;
+    SCRIPT?: any;
+    STYLE?: {
+        content: string;
+        id: string;
+    };
+}
+
+function readVueFile(fileContent : string) {
+    console.log('readVueFile', fileContent)
     const component = parseComponent(fileContent, { pad: 'line' });
-    const result = {};
+    const result : VueFileContent = {};
 
     if (component.template) {
         result.TEMPLATE = component.template.content;
@@ -333,12 +365,19 @@ function readVueFile(fileContent) {
     return result;
 }
 
+declare module 'vue/types/vue' {
+    interface Vue {
+        viewCtx: any;
+        component: ComponentObject | null;
+    }
+}
+
 Vue.component('jupyter-widget', {
     props: ['widget'],
     inject: ['viewCtx'],
     data() {
         return {
-            component: null,
+            component:  null as ComponentObject | null,
         };
     },
     created() {
@@ -353,7 +392,7 @@ Vue.component('jupyter-widget', {
         update() {
             this.viewCtx
                 .getModelById(this.widget.substring(10))
-                .then((mdl) => {
+                .then((mdl : WidgetModel) => {
                     this.component = createComponentObject(mdl, this.viewCtx.getView());
                 });
         },

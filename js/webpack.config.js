@@ -16,7 +16,8 @@ module.exports = [
         output: {
             filename: 'index.js',
             path: path.resolve(__dirname, '..', 'ipyvue', 'nbextension'),
-            libraryTarget: 'amd'
+            libraryTarget: 'amd',
+            devtoolModuleFilenameTemplate: `webpack://jupyter-widgets/jupyter-vue/[resource-path]?[loaders]`,
         },
         devtool: 'source-map',
         externals: ['@jupyter-widgets/base'],
@@ -31,7 +32,8 @@ module.exports = [
         output: {
             filename: 'nodeps.js',
             path: path.resolve(__dirname, '..', 'ipyvue', 'nbextension'),
-            libraryTarget: 'amd'
+            libraryTarget: 'amd',
+            devtoolModuleFilenameTemplate: `webpack://jupyter-widgets/jupyter-vue/[resource-path]?[loaders]`,
         },
         devtool: 'source-map',
         externals: ['@jupyter-widgets/base', 'vue'],
@@ -41,7 +43,7 @@ module.exports = [
             maxAssetSize: 1400000
         },
         resolve: {
-            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
+            alias: { './VueWithCompiler$': path.resolve(__dirname, 'lib/nodepsVueWithCompiler.js') },
         },
     },
     {
@@ -50,7 +52,8 @@ module.exports = [
             filename: 'nodeps.js',
             path: path.resolve(__dirname, 'dist'),
             libraryTarget: 'amd',
-            publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/'
+            publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/',
+            devtoolModuleFilenameTemplate: `webpack://jupyter-widgets/jupyter-vue/[resource-path]?[loaders]`,
         },
         devtool: 'source-map',
         externals: ['@jupyter-widgets/base', 'vue'],
@@ -60,7 +63,7 @@ module.exports = [
             maxAssetSize: 1400000
         },
         resolve: {
-            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
+            alias: { './VueWithCompiler$': path.resolve(__dirname, 'lib/nodepsVueWithCompiler.js') },
         },
     },
     {
@@ -69,7 +72,8 @@ module.exports = [
             filename: 'index.js',
             path: path.resolve(__dirname, 'dist'),
             libraryTarget: 'amd',
-            publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/'
+            publicPath: 'https://unpkg.com/jupyter-vue@' + version + '/dist/',
+            devtoolModuleFilenameTemplate: `webpack://jupyter-widgets/jupyter-vue/[resource-path]?[loaders]`,
         },
         devtool: 'source-map',
         externals: ['@jupyter-widgets/base'],

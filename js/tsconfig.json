@@ -5,6 +5,12 @@
     "target": "es6",
     "rootDir": "src",
     "skipLibCheck": true,
+    "moduleResolution": "node",
+    // "noEmitOnError": true,
+    "noUnusedLocals": true,
+    "sourceMap": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
   },
   "include": ["./src/**/*"],
   "exclude": [
