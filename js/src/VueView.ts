@@ -2,9 +2,9 @@ import { DOMWidgetView } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import { vueRender } from './VueRenderer';
 
-export function createViewContext(view) {
+export function createViewContext(view : VueView) {
     return {
-        getModelById(modelId) {
+        getModelById(modelId: string) {
             return view.model.widget_manager.get_model(modelId);
         },
         /* TODO: refactor to abstract the direct use of WidgetView away */
@@ -15,6 +15,7 @@ export function createViewContext(view) {
 }
 
 export class VueView extends DOMWidgetView {
+    vueApp: any;
     remove() {
         this.vueApp.$destroy();
         return super.remove();
