@@ -103,7 +103,9 @@ class Events(object):
         """Manually trigger an event handler on the Python side."""
         # note that a click event will trigger click.stop if that particular
         # event+modifier is registered.
-        event_match = [k for k in self._event_handlers_map.keys() if k.startswith(event)]
+        event_match = [
+            k for k in self._event_handlers_map.keys() if k.startswith(event)
+        ]
         if not event_match:
             raise ValueError(f"'{event}' not found in widget {self}")
 
