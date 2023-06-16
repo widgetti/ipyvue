@@ -44,11 +44,11 @@ def watch(paths=""):
 def get_template(abs_path):
     abs_path = os.path.normpath(abs_path)
     if abs_path not in template_registry:
-        with open(abs_path) as f:
+        with open(abs_path, encoding="utf-8") as f:
             tw = Template(template=f.read())
             template_registry[abs_path] = tw
     else:
-        with open(abs_path) as f:
+        with open(abs_path, encoding="utf-8") as f:
             template_registry[abs_path].template = f.read()
     return template_registry[abs_path]
 
