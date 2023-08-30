@@ -51,29 +51,34 @@ export function createObjectForNestedModel(model, parentView) {
     };
 }
 
+// based on https://stackoverflow.com/a/58416333/5397207
+function pickSerializable(object, depth=0, max_depth=2) {
+    // change max_depth to see more levels, for a touch event, 2 is good
+    if (depth > max_depth)
+        return 'Object';
+
+    const obj = {};
+    for (let key in object) {
+        let value = object[key];
+        if (value instanceof Node)
+            // specify which properties you want to see from the node
+            value = {id: value.id};
+        else if (value instanceof Window)
+            value = 'Window';
+        else if (value instanceof Object)
+            value = pickSerializable(value, depth+1, max_depth);
+
+        obj[key] = value;
+    }
+
+    return obj;
+}
+
 export function eventToObject(event) {
     if (event == null) {
         return event;
     }
-    let props;
-    switch (event.constructor) {
-        case MouseEvent:
-            props = ['altKey', 'ctrlKey', 'metaKey', 'shiftKey', 'offsetX', 'offsetY', 'clientX', 'clientY', 'pageX', 'pageY', 'screenX', 'screenY', 'shiftKey', 'x', 'y'];
-            break;
-        case WheelEvent:
-            props = ['altKey', 'ctrlKey', 'metaKey', 'shiftKey', 'offsetX', 'offsetY', 'clientX', 'clientY', 'pageX', 'pageY', 'screenX', 'screenY', 'shiftKey', 'x', 'y', 'wheelDelta', 'wheelDeltaX', 'wheelDeltaY'];
-            break;
-        // TODO: More events
-        default:
-            return event;
-    }
-
-    return props.reduce(
-        (result, key) => {
-            result[key] = event[key]; // eslint-disable-line no-param-reassign
-            return result;
-        }, {},
-    );
+    return pickSerializable(event);
 }
 
 export function vueRender(createElement, model, parentView, slotScopes) {
