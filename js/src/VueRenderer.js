@@ -75,10 +75,10 @@ function pickSerializable(object, depth=0, max_depth=2) {
 }
 
 export function eventToObject(event) {
-    if (event == null) {
-        return event;
+    if (event instanceof Event) {
+        return pickSerializable(event);
     }
-    return pickSerializable(event);
+    return event;
 }
 
 export function vueRender(createElement, model, parentView, slotScopes) {
