@@ -9,7 +9,7 @@ from IPython.display import display
 from unittest.mock import MagicMock
 
 
-def test_widget_button(solara_test, page_session: playwright.sync_api.Page):
+def test_event_basics(solara_test, page_session: playwright.sync_api.Page):
     inner = vue.Html(tag="div", children=["Click Me!"])
     outer = vue.Html(tag="dev", children=[inner])
     mock_outer = MagicMock()
