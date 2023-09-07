@@ -9,7 +9,7 @@ from IPython.display import display
 from unittest.mock import MagicMock
 
 
-def test_widget_button(solara_test, page_session: playwright.sync_api.Page):
+def test_event_basics(solara_test, page_session: playwright.sync_api.Page):
     inner = vue.Html(tag="div", children=["Click Me!"])
     outer = vue.Html(tag="dev", children=[inner])
     mock_outer = MagicMock()
@@ -36,3 +36,26 @@ def test_widget_button(solara_test, page_session: playwright.sync_api.Page):
     inner_sel.click()
     page_session.locator("text=Clicked").wait_for()
     mock_outer.assert_called_once()
+
+
+def test_mouse_event(solara_test, page_session: playwright.sync_api.Page):
+    div = vue.Html(tag="div", children=["Click Me!"])
+    last_event_data = None
+
+    def on_click(widget, event, data):
+        nonlocal last_event_data
+        last_event_data = data
+        div.children = ["Clicked"]
+
+    div.on_event("click", on_click)
+    display(div)
+
+    # click in the div
+    box = page_session.locator("text=Click Me!").bounding_box()
+    assert box is not None
+    page_session.mouse.click(box["x"], box["y"])
+
+    page_session.locator("text=Clicked").wait_for()
+    assert last_event_data is not None
+    assert last_event_data["x"] == box["x"]
+    assert last_event_data["y"] == box["y"]

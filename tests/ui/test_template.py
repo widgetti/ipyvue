@@ -8,7 +8,7 @@ import ipyvue as vue
 import playwright.sync_api
 
 from IPython.display import display
-from traitlets import default, Int
+from traitlets import default, Int, Callable, Unicode
 
 
 class MyTemplate(vue.VueTemplate):
@@ -37,3 +37,36 @@ def test_template(ipywidgets_runner, page_session: playwright.sync_api.Page):
     widget.wait_for()
     widget.click()
     page_session.locator("text=Clicked 1").wait_for()
+
+
+class MyEventTemplate(vue.VueTemplate):
+    on_custom = Callable()
+    text = Unicode("Click Me").tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div @click="custom_event('not-an-event-object')">{{text}}</div>
+        </template>
+        """
+
+    def vue_custom_event(self, data):
+        self.on_custom(data)
+
+
+def test_template_custom_event(solara_test, page_session: playwright.sync_api.Page):
+    last_event_data = None
+
+    def on_custom(data):
+        nonlocal last_event_data
+        last_event_data = data
+        div.text = "Clicked"
+
+    div = MyEventTemplate(on_custom=on_custom)
+
+    display(div)
+
+    page_session.locator("text=Click Me").click()
+    page_session.locator("text=Clicked").wait_for()
+    assert last_event_data == "not-an-event-object"
