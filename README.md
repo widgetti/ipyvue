@@ -25,3 +25,10 @@ For a development installation (requires npm),
     $ jupyter nbextension install --py --symlink --sys-prefix ipyvue
     $ jupyter nbextension enable --py --sys-prefix ipyvue
     $ jupyter labextension develop . --overwrite
+
+Sponsors
+--------
+
+Project ipyvue receives direct funding from the following sources:
+
+[![MSD](resources/msd-logo.svg)](https://msd.com)
