@@ -22,6 +22,14 @@ export async function compileSfc(sfcStr, mixin) {
         }
     });
 
+    if (script) {
+        /* For backward compatibility, if module(s).export is used, replace everything before the first { with
+         * export default
+         */
+        if (/modules?\.export.*?{/.test(script.content)) {
+            script.content = script.content.replace(/^[^{]+(?={)/, "export default ");
+        }
+    }
     return {
         ...(template && {render: Vue.compile(template.content)}),
         mixins: [script ? (await toModule(script.content)).default : {}, mixin],
