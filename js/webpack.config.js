@@ -1,5 +1,13 @@
 var path = require('path');
 var version = require('./package.json').version;
+const webpack = require('webpack');
+
+const plugins = [
+    new webpack.DefinePlugin({
+        __VUE_OPTIONS_API__: true,
+        __VUE_PROD_DEVTOOLS__: false,
+    })
+]
 
 module.exports = [
     {
@@ -10,6 +18,7 @@ module.exports = [
             libraryTarget: 'amd'
         },
         mode: 'production',
+        plugins,
     },
     {
         entry: './lib/index.js',
@@ -25,6 +34,12 @@ module.exports = [
             maxEntrypointSize: 1400000,
             maxAssetSize: 1400000
         },
+        resolve: {
+            alias: {
+                vue$: 'vue/dist/vue.esm-bundler.js',
+            },
+        },
+        plugins,
     },
     {
         entry: './lib/nodeps.js',
@@ -41,8 +56,12 @@ module.exports = [
             maxAssetSize: 1400000
         },
         resolve: {
-            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
+            alias: {
+                // './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js')
+                vue$: 'vue/dist/vue.esm-bundler.js',
+            },
         },
+        plugins,
     },
     {
         entry: './lib/nodeps.js',
@@ -60,8 +79,12 @@ module.exports = [
             maxAssetSize: 1400000
         },
         resolve: {
-            alias: { './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js') },
+            alias: {
+                // './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js')
+                vue$: 'vue/dist/vue.esm-bundler.js',
+            },
         },
+        plugins,
     },
     {
         entry: './lib/embed.js',
@@ -78,5 +101,6 @@ module.exports = [
             maxEntrypointSize: 1400000,
             maxAssetSize: 1400000
         },
+        plugins,
     },
 ];

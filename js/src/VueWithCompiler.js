@@ -1,6 +1,6 @@
-import { addCompiler } from '@mariobuikhuizen/vue-compiler-addon';
-import Vue from 'vue';
+// import { addCompiler } from '@mariobuikhuizen/vue-compiler-addon';
+// import { * as Vue } from 'vue';
+export * from 'vue';
+// addCompiler(Vue);
 
-addCompiler(Vue);
-
-export default Vue;
+// export Vue;

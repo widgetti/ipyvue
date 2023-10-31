@@ -1,23 +1,22 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
-import Vue from 'vue';
-import { parseComponent } from '@mariobuikhuizen/vue-compiler-addon';
+import * as Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
-import httpVueLoader from './httpVueLoader';
 import { TemplateModel } from './Template';
+import {getAsyncComponent} from "./esmVueTemplate";
 
-export function vueTemplateRender(createElement, model, parentView) {
-    return createElement(createComponentObject(model, parentView));
+export function vueTemplateRender(model, parentView) {
+    return Vue.h(createComponentObject(model, parentView));
 }
 
 function createComponentObject(model, parentView) {
     if (model instanceof VueModel) {
         return {
-            render(createElement) {
-                return vueRender(createElement, model, parentView, {});
+            render() {
+                return vueRender(model, parentView, {});
             },
         };
     }
@@ -28,101 +27,131 @@ function createComponentObject(model, parentView) {
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
     const template = templateModel.get('template');
-    const vuefile = readVueFile(template);
-
-    const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
-    const cssId = (vuefile.STYLE && vuefile.STYLE.id);
-
-    if (css) {
-        if (cssId) {
-            const prefixedCssId = `ipyvue-${cssId}`;
-            let style = document.getElementById(prefixedCssId);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = prefixedCssId;
-                document.head.appendChild(style);
-            }
-            if (style.innerHTML !== css) {
-                style.innerHTML = css;
-            }
-        } else {
-            const style = document.createElement('style');
-            style.id = model.cid;
-            style.innerHTML = css;
-            document.head.appendChild(style);
-            parentView.once('remove', () => {
-                document.head.removeChild(style);
-            });
-        }
-    }
+    // const vuefile = readVueFile(template);
+    //
+    // const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
+    // const cssId = (vuefile.STYLE && vuefile.STYLE.id);
+    //
+    // if (css) {
+    //     if (cssId) {
+    //         const prefixedCssId = `ipyvue-${cssId}`;
+    //         let style = document.getElementById(prefixedCssId);
+    //         if (!style) {
+    //             style = document.createElement('style');
+    //             style.id = prefixedCssId;
+    //             document.head.appendChild(style);
+    //         }
+    //         if (style.innerHTML !== css) {
+    //             style.innerHTML = css;
+    //         }
+    //     } else {
+    //         const style = document.createElement('style');
+    //         style.id = model.cid;
+    //         style.innerHTML = css;
+    //         document.head.appendChild(style);
+    //         parentView.once('remove', () => {
+    //             document.head.removeChild(style);
+    //         });
+    //     }
+    // }
 
     // eslint-disable-next-line no-new-func
-    const methods = model.get('methods') ? Function(`return ${model.get('methods').replace('\n', ' ')}`)() : {};
+    // const methods = model.get('methods') ? Function(`return ${model.get('methods').replace('\n', ' ')}`)() : {};
     // eslint-disable-next-line no-new-func
-    const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
+    // const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
-    function callVueFn(name, this_) {
-        if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
-            vuefile.SCRIPT[name].bind(this_)();
+    // function callVueFn(name, this_) {
+    //     if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
+    //         vuefile.SCRIPT[name].bind(this_)();
+    //     }
+    // }
+    //
+    // return {
+    //     inject: ['viewCtx'],
+    //     data() {
+    //         // data that is only used in the template, and not synced with the backend/model
+    //         const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
+    //         return { ...data, ...dataTemplate, ...createDataMapping(model) };
+    //     },
+    //     beforeCreate() {
+    //         callVueFn('beforeCreate', this);
+    //     },
+    //     created() {
+    //         this.__onTemplateChange = () => {
+    //             this.$root.$forceUpdate();
+    //         };
+    //         templateModel.on('change:template', this.__onTemplateChange);
+    //         addModelListeners(model, this);
+    //         callVueFn('created', this);
+    //     },
+    //     watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
+    //     methods: {
+    //         ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
+    //         ...methods,
+    //         ...createMethods(model, parentView),
+    //     },
+    //     components: {
+    //         ...createInstanceComponents(instanceComponents, parentView),
+    //         ...createClassComponents(classComponents, model, parentView),
+    //         ...createFullVueComponents(fullVueComponents),
+    //     },
+    //     computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
+    //     template: vuefile.TEMPLATE || template,
+    //     beforeMount() {
+    //         callVueFn('beforeMount', this);
+    //     },
+    //     mounted() {
+    //         callVueFn('mounted', this);
+    //     },
+    //     beforeUpdate() {
+    //         callVueFn('beforeUpdate', this);
+    //     },
+    //     updated() {
+    //         callVueFn('updated', this);
+    //     },
+    //     beforeDestroy() {
+    //         templateModel.off('change:template', this.__onTemplateChange);
+    //         callVueFn('beforeDestroy', this);
+    //     },
+    //     destroyed() {
+    //         callVueFn('destroyed', this);
+    //     },
+    // };
+    return getAsyncComponent(
+        template,
+        {
+            ...createModelMixin(model, templateModel, parentView),
+            components: {
+                ...createInstanceComponents(instanceComponents, parentView),
+                ...createClassComponents(classComponents, model, parentView),
+                ...createFullVueComponents(fullVueComponents),
+            },
         }
-    }
+    );
+}
 
-    return {
+export function createModelMixin(model, templateModel, parentView) {
+    return ({
         inject: ['viewCtx'],
-        data() {
-            // data that is only used in the template, and not synced with the backend/model
-            const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
-            return { ...data, ...dataTemplate, ...createDataMapping(model) };
+        data: () => {
+            return createDataMapping(model);
         },
-        beforeCreate() {
-            callVueFn('beforeCreate', this);
-        },
+        watch: createWatches(model, parentView),
         created() {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
             templateModel.on('change:template', this.__onTemplateChange);
             addModelListeners(model, this);
-            callVueFn('created', this);
         },
-        watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
-        methods: {
-            ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
-            ...methods,
-            ...createMethods(model, parentView),
-        },
-        components: {
-            ...createInstanceComponents(instanceComponents, parentView),
-            ...createClassComponents(classComponents, model, parentView),
-            ...createFullVueComponents(fullVueComponents),
-        },
-        computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
-        template: vuefile.TEMPLATE || template,
-        beforeMount() {
-            callVueFn('beforeMount', this);
-        },
-        mounted() {
-            callVueFn('mounted', this);
-        },
-        beforeUpdate() {
-            callVueFn('beforeUpdate', this);
-        },
-        updated() {
-            callVueFn('updated', this);
-        },
-        beforeDestroy() {
-            templateModel.off('change:template', this.__onTemplateChange);
-            callVueFn('beforeDestroy', this);
-        },
-        destroyed() {
-            callVueFn('destroyed', this);
-        },
-    };
+        methods: createMethods(model, parentView),
+        computed: aliasRefProps(model),
+    });
 }
 
 function createDataMapping(model) {
@@ -162,7 +191,7 @@ function addModelListeners(model, vueModel) {
     });
 }
 
-function createWatches(model, parentView, templateWatchers) {
+function createWatches(model, parentView) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
             && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
@@ -170,9 +199,6 @@ function createWatches(model, parentView, templateWatchers) {
             ...result,
             [prop]: {
                 handler(value) {
-                    if (templateWatchers && templateWatchers[prop]) {
-                        templateWatchers[prop].bind(this)(value);
-                    }
                     /* Don't send changes received from backend back */
                     if (_.isEqual(value, model.get(prop))) {
                         return;
@@ -275,11 +301,11 @@ function createClassComponents(components, containerModel, parentView) {
                     }
                 },
             }), {}),
-            render(createElement) {
+            render() {
                 if (this.model) {
-                    return vueRender(createElement, this.model, parentView, {});
+                    return vueRender(this.model, parentView, {});
                 }
-                return createElement('div', ['temp-content']);
+                return Vue.h('div', ['temp-content']);
             },
         }),
     }), {});
@@ -288,7 +314,7 @@ function createClassComponents(components, containerModel, parentView) {
 function createFullVueComponents(components) {
     return components.reduce((accumulator, [componentName, vueFile]) => ({
         ...accumulator,
-        [componentName]: httpVueLoader(vueFile),
+        [componentName]: getAsyncComponent(vueFile, {}),
     }), {});
 }
 
@@ -308,60 +334,33 @@ function aliasRefProps(model) {
         }), {});
 }
 
-function readVueFile(fileContent) {
-    const component = parseComponent(fileContent, { pad: 'line' });
-    const result = {};
-
-    if (component.template) {
-        result.TEMPLATE = component.template.content;
-    }
-    if (component.script) {
-        const { content } = component.script;
-        const str = content
-            .substring(content.indexOf('{'), content.length)
-            .replace('\n', ' ');
-
-        // eslint-disable-next-line no-new-func
-        result.SCRIPT = Function(`return ${str}`)();
-    }
-    if (component.styles && component.styles.length > 0) {
-        const { content } = component.styles[0];
-        const { id } = component.styles[0].attrs;
-        result.STYLE = { content, id };
-    }
-
-    return result;
-}
-
-Vue.component('jupyter-widget', {
-    props: ['widget'],
-    inject: ['viewCtx'],
-    data() {
-        return {
-            component: null,
-        };
-    },
-    created() {
-        this.update();
-    },
-    watch: {
-        widget() {
+export function jupyterWidgetComponent() {
+    const component = Vue.shallowRef(null);
+    return {
+        props: ['widget'],
+        inject: ['viewCtx'],
+        created() {
             this.update();
         },
-    },
-    methods: {
-        update() {
-            this.viewCtx
-                .getModelById(this.widget.substring(10))
-                .then((mdl) => {
-                    this.component = createComponentObject(mdl, this.viewCtx.getView());
-                });
+        watch: {
+            widget() {
+                this.update();
+            },
         },
-    },
-    render(createElement) {
-        if (!this.component) {
-            return createElement('div');
-        }
-        return createElement(this.component);
-    },
-});
+        methods: {
+            update() {
+                this.viewCtx
+                    .getModelById(this.widget.substring(10))
+                    .then((mdl) => {
+                        component.value = createComponentObject(mdl, this.viewCtx.getView());
+                    });
+            },
+        },
+        render() {
+            if (!component.value) {
+                return Vue.h('div');
+            }
+            return Vue.h(component.value);
+        },
+    }
+}

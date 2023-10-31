@@ -1,6 +1,10 @@
 import { DOMWidgetView } from '@jupyter-widgets/base';
-import Vue from 'vue';
+import * as Vue from 'vue';
 import { vueRender } from './VueRenderer';
+import { jupyterWidgetComponent } from './VueTemplateRenderer';
+import {addApp, removeApp} from "./VueComponentModel";
+
+window.Vue = Vue;
 
 export function createViewContext(view) {
     return {
@@ -16,23 +20,30 @@ export function createViewContext(view) {
 
 export class VueView extends DOMWidgetView {
     remove() {
-        this.vueApp.$destroy();
+        this.vueApp.unmount();
+        removeApp(this.vueApp);
         return super.remove();
     }
 
     render() {
         super.render();
         this.displayed.then(() => {
-            const vueEl = document.createElement('div');
-            this.el.appendChild(vueEl);
-
-            this.vueApp = new Vue({
-                el: vueEl,
+            this.vueApp = Vue.createApp({
                 provide: {
                     viewCtx: createViewContext(this),
                 },
-                render: createElement => vueRender(createElement, this.model, this, {}),
+                setup: () => {
+                    return () => vueRender(this.model, this, {});
+                }
             });
+
+            addApp(this.vueApp, this.model.widget_manager);
+            this.vueApp.component('jupyter-widget', jupyterWidgetComponent())
+            this.addPlugins(this.vueApp);
+            this.vueApp.mount(this.el);
         });
+    }
+
+    addPlugins(vueApp) {
     }
 }
