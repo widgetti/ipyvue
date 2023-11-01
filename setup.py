@@ -180,7 +180,7 @@ setup(
     ],
     extras_require={
         "test": [
-            "solara[pytest]",
+            "solara[pytest] @ https://github.com/widgetti/solara/archive/refs/heads/11-01-feat_testing_support_passing_local_variable_to_kernels.zip",  # noqa: E501
         ],
         "dev": [
             "pre-commit",
