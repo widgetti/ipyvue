@@ -270,7 +270,7 @@ function createClassComponents(components, containerModel, parentView) {
                     {
                         create_widget: componentSpec.class, // eslint-disable-line camelcase
                         id: this.id,
-                        props: this.$options.propsData,
+                        props: this.$props,
                     },
                     containerModel.callbacks(parentView),
                 );
