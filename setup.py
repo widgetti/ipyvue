@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import glob
+import re
 import os
 import platform
 import sys
@@ -27,8 +28,33 @@ npm_path = os.pathsep.join(
 LONG_DESCRIPTION = "Jupyter widgets base for Vue libraries"
 
 
+def convert_version_string(version_string):
+    # Define a regex pattern to match version strings like "3.0.0.dev0"
+    # "3.0.0.alpha1", etc.
+    pattern = re.compile(r"(\d+\.\d+\.\d+)\.(dev|alpha|beta)(\d*)")
+
+    # Search for the pattern in the input string
+    match = pattern.search(version_string)
+    if match:
+        # Extract the matched groups
+        main_version, pre_release, pre_release_number = match.groups()
+
+        # If there is a pre-release number, add a '.' before it
+        if pre_release_number:
+            pre_release = f"{pre_release}.{pre_release_number}"
+
+        # Reassemble the parts into the desired format
+        new_version_string = f"{main_version}-{pre_release}"
+        return new_version_string
+    else:
+        # If the pattern is not found, return the original string
+        return version_string + "nomatch"
+
+
 def get_data_files():
-    tgz = "jupyter-vue-" + version_ns["__version__"] + ".tgz"
+    js_version = convert_version_string(version_ns["__version__"])
+
+    tgz = "jupyter-vue-" + js_version + ".tgz"
     return [
         ("share/jupyter/nbextensions/jupyter-vue", glob.glob("ipyvue/nbextension/*")),
         (
