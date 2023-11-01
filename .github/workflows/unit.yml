@@ -117,7 +117,7 @@ jobs:
       - name: Install vuetify and test deps
         run: |
           wheel=(dist/*.whl)
-          pip install ${wheel}[test] "jupyter_server<2"
+          pip install ${wheel} https://github.com/widgetti/ipyvuetify/archive/refs/heads/vuetify3.zip ${wheel}[test] "jupyter_server<2"
 
       - name: Install playwright browsers
         run: playwright install chromium
