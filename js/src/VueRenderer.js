@@ -82,6 +82,11 @@ export function eventToObject(event) {
 }
 
 function resolve(componentOrTag) {
+    const tagCheck = document.createElement(componentOrTag).toString();
+    if (!["[object HTMLUnknownElement]", "[object HTMLElement]"].includes(tagCheck)) {
+        /* this is a default HTML-tag */
+        return componentOrTag;
+    }
     try {
         return Vue.resolveComponent(componentOrTag);
     } catch (e) {
