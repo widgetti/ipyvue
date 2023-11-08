@@ -1,8 +1,26 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel } from '@jupyter-widgets/base';
-import Vue from 'vue';
-import httpVueLoader from './httpVueLoader';
 import {TemplateModel} from './Template';
+import {getAsyncComponent} from "./esmVueTemplate";
+
+const apps = new Set();
+
+export function addApp(app, widget_manager) {
+    apps.add(app);
+    (async () => {
+        const models = await Promise.all(Object.values(widget_manager._models));
+        models
+            .filter(model => model instanceof VueComponentModel)
+            .forEach(model => {
+                const name = model.get('name');
+                app.component(name, model.compiledComponent);
+            })
+    })();
+}
+
+export function removeApp(app) {
+    apps.delete(app);
+}
 
 export class VueComponentModel extends DOMWidgetModel {
     defaults() {
@@ -11,7 +29,7 @@ export class VueComponentModel extends DOMWidgetModel {
             ...{
                 _model_name: 'VueComponentModel',
                 _model_module: 'jupyter-vue',
-                _model_module_version: '^0.0.3',
+                _model_module_version: '3.0.0-dev.0',
                 name: null,
                 component: null,
             },
@@ -24,9 +42,17 @@ export class VueComponentModel extends DOMWidgetModel {
         const [, { widget_manager }] = args;
 
         const name = this.get('name');
-        Vue.component(name, httpVueLoader(this.get('component')));
+
+        this.compiledComponent = getAsyncComponent(this.get('component'), {});
+
+        apps.forEach(app => {
+            app.component(name, this.compiledComponent);
+        });
         this.on('change:component', () => {
-            Vue.component(name, httpVueLoader(this.get('component')));
+            this.compiledComponent = getAsyncComponent(this.get('component'), {});
+            apps.forEach(app => {
+                app.component(name, this.compiledComponent);
+            });
 
             (async () => {
                 const models = await Promise.all(Object.values(widget_manager._models));
