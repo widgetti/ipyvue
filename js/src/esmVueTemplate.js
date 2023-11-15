@@ -40,6 +40,15 @@ export function getAsyncComponent(sfcStr, mixin) {
     return Vue.defineAsyncComponent(() => compileSfc(sfcStr, mixin));
 }
 
+export async function addModule(name, module) {
+    await init();
+    importShim.addImportMap({
+        "imports": {
+            [name]: expose(module),
+        }
+    })
+}
+
 let _init_promise = null;
 async function init() {
     if (!_init_promise) {

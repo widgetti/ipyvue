@@ -7,6 +7,6 @@ export { TemplateModel } from './Template';
 export { ForceLoadModel } from './ForceLoad';
 export { vueRender } from './VueRenderer';
 export { VueComponentModel } from './VueComponentModel';
-export { getAsyncComponent } from './esmVueTemplate';
+export { getAsyncComponent, addModule } from './esmVueTemplate';
 
 export const { version } = require('../package.json'); // eslint-disable-line global-require
