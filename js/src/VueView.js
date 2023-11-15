@@ -27,12 +27,17 @@ export class VueView extends DOMWidgetView {
 
     render() {
         super.render();
-        this.displayed.then(() => {
+        (async () => {
+            const br = this.beforeViewRender();
+            await this.displayed;
+            await br;
+
             this.vueApp = Vue.createApp({
                 provide: {
                     viewCtx: createViewContext(this),
                 },
                 setup: () => {
+                    this.onSetup();
                     return () => vueRender(this.model, this, {});
                 }
             });
@@ -41,9 +46,16 @@ export class VueView extends DOMWidgetView {
             this.vueApp.component('jupyter-widget', jupyterWidgetComponent())
             this.addPlugins(this.vueApp);
             this.vueApp.mount(this.el);
-        });
+        })()
+
     }
 
     addPlugins(vueApp) {
+    }
+
+    onSetup() {
+    }
+
+    async beforeViewRender() {
     }
 }
