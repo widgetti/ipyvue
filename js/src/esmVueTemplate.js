@@ -1,5 +1,6 @@
 import * as Vue from 'vue'
 import { parse } from 'vue/compiler-sfc'
+import esModuleShims from './es-module-shims-txt.js'
 
 window.esmsInitOptions = { shimMode: true };
 
@@ -71,19 +72,19 @@ async function init() {
 init();
 
 async function loadShim() {
-    if (document.querySelectorAll("script[src*=es-module-shims][type=module]").length) {
+    if (document.querySelectorAll("script[src*=es-module-shims][type=module]").length || document.getElementById("es-module-shims")) {
         console.log("shim was already loadedLoaded");
         return;
     }
-    return loadScript("module", "https://ga.jspm.io/npm:es-module-shims@1.7.0/dist/es-module-shims.js")
+    return loadScript("module", toModuleUrl(esModuleShims), "es-module-shims")
 }
 
-async function loadScript(type, src) {
+async function loadScript(type, src, id) {
     return new Promise((onload, onerror) => {
         document.head.appendChild(
             Object.assign(
                 document.createElement("script"),
-                {type, src, onload, onerror, defer: true }))
+                {type, src, onload, onerror, defer: true, ...id && { id } }))
     })
 }
 
