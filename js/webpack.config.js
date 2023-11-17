@@ -57,7 +57,6 @@ module.exports = [
         },
         resolve: {
             alias: {
-                // './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js')
                 vue$: 'vue/dist/vue.esm-bundler.js',
             },
         },
@@ -80,7 +79,6 @@ module.exports = [
         },
         resolve: {
             alias: {
-                // './VueWithCompiler$': path.resolve(__dirname, 'src/nodepsVueWithCompiler.js')
                 vue$: 'vue/dist/vue.esm-bundler.js',
             },
         },

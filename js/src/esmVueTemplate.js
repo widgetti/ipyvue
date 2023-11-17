@@ -73,7 +73,6 @@ init();
 
 async function loadShim() {
     if (document.querySelectorAll("script[src*=es-module-shims][type=module]").length || document.getElementById("es-module-shims")) {
-        console.log("shim was already loadedLoaded");
         return;
     }
     return loadScript("module", toModuleUrl(esModuleShims), "es-module-shims")
