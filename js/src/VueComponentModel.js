@@ -29,7 +29,7 @@ export class VueComponentModel extends DOMWidgetModel {
             ...{
                 _model_name: 'VueComponentModel',
                 _model_module: 'jupyter-vue',
-                _model_module_version: '3.0.0-dev.0',
+                _model_module_version: '3.0.0-alpha.1',
                 name: null,
                 component: null,
             },

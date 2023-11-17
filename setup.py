@@ -206,7 +206,7 @@ setup(
     ],
     extras_require={
         "test": [
-            "solara[pytest] @ https://github.com/widgetti/solara/archive/refs/heads/11-01-feat_support_for_ipyvue_and_ipyvuetify_v3.zip",  # noqa: E501
+            "solara[pytest]",  # noqa: E501
         ],
         "dev": [
             "pre-commit",

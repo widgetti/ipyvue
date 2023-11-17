@@ -1,6 +1,6 @@
 {
   "name": "jupyter-vue",
-  "version": "3.0.0-dev.0",
+  "version": "3.0.0-alpha.1",
   "description": "Jupyter widgets base for Vue libraries",
   "license": "MIT",
   "author": "Mario Buikhuizen, Maarten Breddels",
