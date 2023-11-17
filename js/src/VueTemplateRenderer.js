@@ -27,101 +27,12 @@ function createComponentObject(model, parentView) {
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
     const template = templateModel.get('template');
-    // const vuefile = readVueFile(template);
-    //
-    // const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
-    // const cssId = (vuefile.STYLE && vuefile.STYLE.id);
-    //
-    // if (css) {
-    //     if (cssId) {
-    //         const prefixedCssId = `ipyvue-${cssId}`;
-    //         let style = document.getElementById(prefixedCssId);
-    //         if (!style) {
-    //             style = document.createElement('style');
-    //             style.id = prefixedCssId;
-    //             document.head.appendChild(style);
-    //         }
-    //         if (style.innerHTML !== css) {
-    //             style.innerHTML = css;
-    //         }
-    //     } else {
-    //         const style = document.createElement('style');
-    //         style.id = model.cid;
-    //         style.innerHTML = css;
-    //         document.head.appendChild(style);
-    //         parentView.once('remove', () => {
-    //             document.head.removeChild(style);
-    //         });
-    //     }
-    // }
-
-    // eslint-disable-next-line no-new-func
-    // const methods = model.get('methods') ? Function(`return ${model.get('methods').replace('\n', ' ')}`)() : {};
-    // eslint-disable-next-line no-new-func
-    // const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
-    // function callVueFn(name, this_) {
-    //     if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
-    //         vuefile.SCRIPT[name].bind(this_)();
-    //     }
-    // }
-    //
-    // return {
-    //     inject: ['viewCtx'],
-    //     data() {
-    //         // data that is only used in the template, and not synced with the backend/model
-    //         const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
-    //         return { ...data, ...dataTemplate, ...createDataMapping(model) };
-    //     },
-    //     beforeCreate() {
-    //         callVueFn('beforeCreate', this);
-    //     },
-    //     created() {
-    //         this.__onTemplateChange = () => {
-    //             this.$root.$forceUpdate();
-    //         };
-    //         templateModel.on('change:template', this.__onTemplateChange);
-    //         addModelListeners(model, this);
-    //         callVueFn('created', this);
-    //     },
-    //     watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
-    //     methods: {
-    //         ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
-    //         ...methods,
-    //         ...createMethods(model, parentView),
-    //     },
-    //     components: {
-    //         ...createInstanceComponents(instanceComponents, parentView),
-    //         ...createClassComponents(classComponents, model, parentView),
-    //         ...createFullVueComponents(fullVueComponents),
-    //     },
-    //     computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
-    //     template: vuefile.TEMPLATE || template,
-    //     beforeMount() {
-    //         callVueFn('beforeMount', this);
-    //     },
-    //     mounted() {
-    //         callVueFn('mounted', this);
-    //     },
-    //     beforeUpdate() {
-    //         callVueFn('beforeUpdate', this);
-    //     },
-    //     updated() {
-    //         callVueFn('updated', this);
-    //     },
-    //     beforeDestroy() {
-    //         templateModel.off('change:template', this.__onTemplateChange);
-    //         callVueFn('beforeDestroy', this);
-    //     },
-    //     destroyed() {
-    //         callVueFn('destroyed', this);
-    //     },
-    // };
     return getAsyncComponent(
         template,
         {

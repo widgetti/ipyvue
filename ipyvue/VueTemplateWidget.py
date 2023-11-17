@@ -87,6 +87,18 @@ def as_refs(name, data):
     return to_ref_structure(data, [])
 
 
+class TraitNotAvailable(Any):
+    def __init__(self, on_use_msg):
+        self.on_use_msg = on_use_msg
+        super().__init__()
+
+    def get(self, *ignored):
+        raise AttributeError(self.on_use_msg(self.name))
+
+    def set(self, *ignored):
+        raise AttributeError(AttributeError(self.on_use_msg(self.name)))
+
+
 class VueTemplate(DOMWidget, Events):
 
     class_component_serialization = {
@@ -116,11 +128,20 @@ class VueTemplate(DOMWidget, Events):
         sync=True, **widget_serialization
     )
 
-    css = Unicode(None, allow_none=True).tag(sync=True)
+    css = TraitNotAvailable(
+        lambda name: "The css trait is no longer available in v3, please use the \
+        template <style> tag instead"
+    )
 
-    methods = Unicode(None, allow_none=True).tag(sync=True)
+    methods = TraitNotAvailable(
+        lambda name: "The methods trait is no longer available in v3, please use \
+        { methods: ...} in the template <script> tag instead"
+    )
 
-    data = Unicode(None, allow_none=True).tag(sync=True)
+    data = TraitNotAvailable(
+        lambda name: "The data trait is no longer available in v3, please use \
+        { data(): ...} in the template <script> tag instead"
+    )
 
     events = List(Unicode(), allow_none=True).tag(sync=True)
 
