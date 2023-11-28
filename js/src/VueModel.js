@@ -2,6 +2,7 @@
 import {
     DOMWidgetModel, unpack_models,
 } from '@jupyter-widgets/base';
+import { version } from './version';
 
 export class VueModel extends DOMWidgetModel {
     defaults() {
@@ -13,8 +14,8 @@ export class VueModel extends DOMWidgetModel {
                 _view_name: 'VueView',
                 _view_module: 'jupyter-vue',
                 _model_module: 'jupyter-vue',
-                _view_module_version: '3.0.0-alpha.1',
-                _model_module_version: '3.0.0-alpha.1',
+                _view_module_version: version,
+                _model_module_version: version,
                 _metadata: null,
                 children: undefined,
                 slot: null,

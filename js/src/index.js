@@ -9,4 +9,4 @@ export { vueRender } from './VueRenderer';
 export { VueComponentModel } from './VueComponentModel';
 export { getAsyncComponent, addModule } from './esmVueTemplate';
 
-export const { version } = require('../package.json'); // eslint-disable-line global-require
+export { version } from './version';

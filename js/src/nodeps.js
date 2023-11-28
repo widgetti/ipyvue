@@ -8,4 +8,4 @@ export { ForceLoadModel } from './ForceLoad';
 export { vueRender } from './VueRenderer';
 export { VueComponentModel } from './VueComponentModel';
 
-export const { version } = require('../package.json'); // eslint-disable-line global-require
+export { version } from './version';

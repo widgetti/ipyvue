@@ -2,6 +2,7 @@
 import { DOMWidgetModel } from '@jupyter-widgets/base';
 import {TemplateModel} from './Template';
 import {getAsyncComponent} from "./esmVueTemplate";
+import { version } from './version';
 
 const apps = new Set();
 
@@ -29,7 +30,7 @@ export class VueComponentModel extends DOMWidgetModel {
             ...{
                 _model_name: 'VueComponentModel',
                 _model_module: 'jupyter-vue',
-                _model_module_version: '3.0.0-alpha.1',
+                _model_module_version: version,
                 name: null,
                 component: null,
             },
