@@ -99,6 +99,11 @@ module.exports = [
             maxEntrypointSize: 1400000,
             maxAssetSize: 1400000
         },
+        resolve: {
+            alias: {
+                vue$: 'vue/dist/vue.esm-bundler.js',
+            },
+        },
         plugins,
     },
 ];
