@@ -163,27 +163,27 @@ function addModelListeners(model, vueModel) {
 }
 
 function createWatches(model, parentView, templateWatchers) {
-    return model.keys()
-        .filter(prop => !prop.startsWith('_')
-            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
-        .reduce((result, prop) => ({
-            ...result,
-            [prop]: {
-                handler(value) {
-                    if (templateWatchers && templateWatchers[prop]) {
-                        templateWatchers[prop].bind(this)(value);
-                    }
-                    /* Don't send changes received from backend back */
-                    if (_.isEqual(value, model.get(prop))) {
-                        return;
-                    }
+    const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
+    && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
+    .reduce((result, prop) => ({
+        ...result,
+        [prop]: {
+            handler(value) {
+                if (templateWatchers && templateWatchers[prop]) {
+                    templateWatchers[prop].bind(this)(value);
+                }
+                /* Don't send changes received from backend back */
+                if (_.isEqual(value, model.get(prop))) {
+                    return;
+                }
 
-                    model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                    model.save_changes(model.callbacks(parentView));
-                },
-                deep: true,
+                model.set(prop, value === undefined ? null : _.cloneDeep(value));
+                model.save_changes(model.callbacks(parentView));
             },
-        }), {});
+            deep: true,
+        },
+    }), {})
+    return {...templateWatchers, ...modelWatchers};
 }
 
 function createMethods(model, parentView) {
