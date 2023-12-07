@@ -183,6 +183,9 @@ function createWatches(model, parentView, templateWatchers) {
             deep: true,
         },
     }), {})
+    /* Overwritten keys from templateWatchers are handled in modelWatchers
+        so that we eventually call all handlers from templateWatchers. 
+    */
     return {...templateWatchers, ...modelWatchers};
 }
 
