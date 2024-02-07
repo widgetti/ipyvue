@@ -146,7 +146,7 @@ function createAttrsMapping(model) {
         }, {});
 }
 
-function addEventWithModifiers(eventAndModifiers, obj, fn) { // eslint-disable-line no-unused-vars
+function addEventWithModifiers(eventAndModifiers, content, slotScopes, obj, fn) { // eslint-disable-line no-unused-vars
     /* Example Vue.compile output:
      * (function anonymous() {
      *         with (this) {
@@ -164,11 +164,12 @@ function addEventWithModifiers(eventAndModifiers, obj, fn) { // eslint-disable-l
      *     }
      * )
      */
-    const { on } = Vue.compile(`<dummy @${eventAndModifiers}="fn"></dummy>`)
+    const { on } = Vue.compile(`<dummy @${eventAndModifiers}="${content || 'fn' }"></dummy>`)
         .render.bind({
             _c: (_, data) => data,
             _k: Vue.prototype._k,
             fn,
+            ...(slotScopes || {}),
         })();
 
     return {
@@ -177,10 +178,12 @@ function addEventWithModifiers(eventAndModifiers, obj, fn) { // eslint-disable-l
     };
 }
 
-function createEventMapping(model, parentView) {
-    return (model.get('_events') || [])
-        .reduce((result, eventAndModifiers) => addEventWithModifiers(
+function createEventMapping(model, parentView, slotScopes) {
+    return Object.entries(model.get('_events') || {})
+        .reduce((result, [eventAndModifiers, content]) => addEventWithModifiers(
             eventAndModifiers,
+            content,
+            slotScopes,
             result,
             (e) => {
                 model.send({
@@ -241,7 +244,7 @@ function createContent(createElement, model, vueModel, parentView, slotScopes) {
     const scopedSlots = createSlots(createElement, model, vueModel, parentView, slotScopes);
 
     return {
-        on: { ...createEventMapping(model, parentView), ...slotUseOn(model, slotScopes) },
+        on: { ...createEventMapping(model, parentView, slotScopes), ...slotUseOn(model, slotScopes) },
         ...model.get('style_') && { style: model.get('style_') },
         ...model.get('class_') && { class: model.get('class_') },
         ...scopedSlots && { scopedSlots: vueModel._u(scopedSlots) },
