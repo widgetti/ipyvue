@@ -195,6 +195,7 @@ setup(
         "jsdeps": NPM,
         "develop": DevelopCmd,
     },
+    license="MIT",
     author="Mario Buikhuizen, Maarten Breddels",
     author_email="mbuikhuizen@gmail.com, maartenbreddels@gmail.com",
     url="https://github.com/widgetti/ipyvue",
