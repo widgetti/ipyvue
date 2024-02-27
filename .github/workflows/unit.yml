@@ -1,9 +1,13 @@
 name: Build
 
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   code-quality:
@@ -132,9 +136,32 @@ jobs:
           name: ipyvue-test-results
           path: test-results
 
+  release-dry-run:
+    needs: [ test,ui-test,code-quality ]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: ipyvue-dist-${{ github.run_number }}
+
+      - name: Install node
+        uses: actions/setup-node@v1
+        with:
+          node-version: "14.x"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish the NPM package
+        run: |
+          cd js
+          echo $PRE_RELEASE
+          if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
+          npm publish --dry-run --tag ${TAG} --access public *.tgz
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRE_RELEASE: ${{ github.event.release.prerelease }}
   release:
     if: startsWith(github.event.ref, 'refs/tags/v')
-    needs: [test,ui-test,code-quality]
+    needs: [release-dry-run]
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/download-artifact@v3
