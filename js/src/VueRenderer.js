@@ -127,6 +127,9 @@ function addListeners(model, vueModel) {
         .forEach(key => model.on(`change:${key}`, listener));
 
     model.on('change:v_model', () => {
+        if (vueModel.v_model === "!!disabled!!") {
+            vueModel.$forceUpdate();
+        }
         if (model.get('v_model') !== vueModel.v_model) {
             vueModel.v_model = model.get('v_model'); // eslint-disable-line no-param-reassign
         }
