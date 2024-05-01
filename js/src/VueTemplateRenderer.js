@@ -102,7 +102,9 @@ function createComponentObject(model, parentView) {
             ...createFullVueComponents(fullVueComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
-        template: vuefile.TEMPLATE || template,
+        template: vuefile.TEMPLATE === undefined && vuefile.SCRIPT === undefined && vuefile.STYLE === undefined
+            ? template
+            : vuefile.TEMPLATE,
         beforeMount() {
             callVueFn('beforeMount', this);
         },
