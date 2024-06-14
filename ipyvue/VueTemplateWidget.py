@@ -1,11 +1,12 @@
 import os
-from traitlets import Any, Unicode, List, Dict, Union, Instance
+from traitlets import Any, Unicode, List, Dict, Union, Instance, default
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
 
 from .Template import Template, get_template
 from ._version import semver
-from .ForceLoad import force_load_instance
+from .ForceLoad import ForceLoad
+from .util import singleton
 import inspect
 from importlib import import_module
 
@@ -94,11 +95,14 @@ class VueTemplate(DOMWidget, Events):
         "to_json": _class_to_json,
     }
 
-    # Force the loading of jupyter-vue before dependent extensions when in a static
-    # context (embed, voila)
-    _jupyter_vue = Any(force_load_instance, read_only=True).tag(
+    # see VueWidget
+    _jupyter_vue = Instance(ForceLoad, read_only=True).tag(
         sync=True, **widget_serialization
     )
+
+    @default("_jupyter_vue")
+    def _default_jupyter_vue(self):
+        return singleton(ForceLoad)
 
     _model_name = Unicode("VueTemplateModel").tag(sync=True)
 

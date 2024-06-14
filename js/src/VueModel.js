@@ -34,4 +34,5 @@ VueModel.serializers = {
     ...DOMWidgetModel.serializers,
     children: { deserialize: unpack_models },
     v_slots: { deserialize: unpack_models },
+    _jupyter_vue: { deserialize: unpack_models },
 };
