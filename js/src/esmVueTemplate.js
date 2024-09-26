@@ -1,12 +1,13 @@
 import * as Vue from 'vue'
-import { parse } from 'vue/compiler-sfc'
+import { parse, compileScript, compileTemplate } from 'vue/compiler-sfc'
 import esModuleShims from './es-module-shims-txt.js'
 
 window.esmsInitOptions = { shimMode: true };
 
 export async function compileSfc(sfcStr, mixin) {
     await init()
-    const { descriptor: {script, template, styles} } = parse(sfcStr);
+    const parsedTemplate = parse(sfcStr)
+    const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
 
     styles && styles.forEach(({content, attrs}) => {
         const prefixedCssId = attrs.id && `ipyvue-${attrs.id}`;
@@ -31,9 +32,25 @@ export async function compileSfc(sfcStr, mixin) {
             script.content = script.content.replace(/^[^{]+(?={)/, "export default ");
         }
     }
+    let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: "abc"});
+    let {setup, ...rest} = compiledScript ? (await toModule(compiledScript.content)).default : {}
+
+    const compiledTemplate = template && compileTemplate({
+        source: template.content,
+        compilerOptions: {
+            bindingMetadata: compiledScript ? compiledScript.bindings : {},
+            prefixIdentifiers: true,
+        }
+    });
+    if (compiledTemplate && compiledTemplate.tips.length) {
+        console.warn(compiledTemplate.tips);
+    }
+
+    const templateModule = (await toModule(compiledTemplate.code))
     return {
-        ...(template && {render: Vue.compile(template.content)}),
-        mixins: [script ? (await toModule(script.content)).default : {}, mixin],
+        ...(template && templateModule),
+        ...(setup && {setup}),
+        mixins: [rest || {}, mixin],
     };
 }
 
