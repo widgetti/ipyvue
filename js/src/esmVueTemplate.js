@@ -46,7 +46,7 @@ export async function compileSfc(sfcStr, mixin) {
         console.warn(compiledTemplate.tips);
     }
 
-    const templateModule = (await toModule(compiledTemplate.code))
+    const templateModule = compiledTemplate && (await toModule(compiledTemplate.code))
     return {
         ...(template && templateModule),
         ...(setup && {setup}),
