@@ -1,6 +1,7 @@
 import * as Vue from 'vue'
 import { parse, compileScript, compileTemplate } from 'vue/compiler-sfc'
 import esModuleShims from './es-module-shims-txt.js'
+import {transform} from "sucrase";
 
 window.esmsInitOptions = { shimMode: true };
 
@@ -33,7 +34,12 @@ export async function compileSfc(sfcStr, mixin) {
         }
     }
     let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: "abc"});
-    let {setup, ...rest} = compiledScript ? (await toModule(compiledScript.content)).default : {}
+
+    const code = compiledScript && (compiledScript.lang === "ts"
+        ? transform(compiledScript.content, { transforms: ["typescript"] }).code
+        : compiledScript.content);
+
+    let {setup, ...rest} = code ? (await toModule(code)).default : {}
 
     const compiledTemplate = template && compileTemplate({
         source: template.content,
