@@ -63,7 +63,7 @@ jobs:
           if [[ $(ls -1 count | wc -l) -ne 3 ]]; then echo "Expected 4 files/directory"; exit 1; fi
 
       - name: Upload builds
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ipyvue-dist-${{ github.run_number }}
           path: |
@@ -80,7 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ipyvue-dist-${{ github.run_number }}
 
@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ipyvue-dist-${{ github.run_number }}
 
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload Test artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ipyvue-test-results
           path: test-results
@@ -140,7 +140,7 @@ jobs:
     needs: [ test,ui-test,code-quality ]
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ipyvue-dist-${{ github.run_number }}
 
@@ -164,7 +164,7 @@ jobs:
     needs: [release-dry-run]
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ipyvue-dist-${{ github.run_number }}
 
