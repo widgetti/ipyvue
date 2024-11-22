@@ -130,6 +130,9 @@ class Events(object):
         data = content.get("data", {})
         self._fire_event(event, data)
 
+    def _clear_event_handler(self):
+        self.on_msg(self._handle_event, remove=True)
+
 
 class VueWidget(DOMWidget, Events):
     # we can drop this when https://github.com/jupyter-widgets/ipywidgets/pull/3592
@@ -191,6 +194,10 @@ class VueWidget(DOMWidget, Events):
         """Make the widget invisible"""
 
         self.class_list.add("d-none")
+
+    def close(self):
+        self._clear_event_handler()
+        super().close()
 
 
 __all__ = ["VueWidget"]
