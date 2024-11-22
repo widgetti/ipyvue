@@ -60,6 +60,9 @@ class Events(object):
             else:
                 getattr(self, "vue_" + event)(data)
 
+    def _clear_event_handler(self):
+        self.on_msg(self._handle_event, remove=True)
+
 
 def _value_to_json(x, obj):
     if inspect.isclass(x):
@@ -172,6 +175,10 @@ class VueTemplate(DOMWidget, Events):
 
         for traitlet in sync_ref_traitlets:
             create_ref_and_observe(traitlet)
+
+    def close(self):
+        self._clear_event_handler()
+        super().close()
 
 
 __all__ = ["VueTemplate"]
