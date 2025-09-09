@@ -322,12 +322,30 @@ function readVueFile(fileContent) {
     }
     if (component.script) {
         const { content } = component.script;
-        const str = content
-            .substring(content.indexOf('{'), content.length)
-            .replace('\n', ' ');
-
-        // eslint-disable-next-line no-new-func
-        result.SCRIPT = Function(`return ${str}`)();
+        try {
+            // Try the new approach first: define module and exports, then evaluate the whole script as if it is a commonjs module
+            const module = {
+                exports: {}
+            };
+            const scriptFunction = new Function('module', 'exports', content);
+            scriptFunction(module, module.exports);
+            result.SCRIPT = module.exports;
+        } catch (error) {
+            // Fallback to the old approach for backwards compatibility
+            console.warn('Failed to evaluate Vue script and find module.exports, falling back to old method, please use module.exports = { ... }');
+            try {
+                const str = content
+                    .substring(content.indexOf('{'), content.length)
+                    .replace('\n', ' ');
+                // eslint-disable-next-line no-new-func
+                result.SCRIPT = Function(`return ${str}`)();
+            } catch (fallbackError) {
+                console.warn('Failed to evaluate Vue script with both new and old methods:', fallbackError);
+                /*  This is a bit like the old behaviour, except we assume the first error is probably correcter
+                    moreoften than not, since the old method can fail due to a { being present before module.exports */
+                throw error;
+            }
+        }
     }
     if (component.styles && component.styles.length > 0) {
         const { content } = component.styles[0];
