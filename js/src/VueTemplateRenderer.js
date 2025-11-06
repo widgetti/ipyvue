@@ -28,7 +28,8 @@ function createComponentObject(model, parentView) {
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
     const template = templateModel.get('template');
-    const vuefile = readVueFile(template);
+    const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
+    const vuefile = readVueFile(template, sourceCodeFile);
 
     const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
     const cssId = (vuefile.STYLE && vuefile.STYLE.id);
@@ -313,7 +314,7 @@ function aliasRefProps(model) {
         }), {});
 }
 
-function readVueFile(fileContent) {
+function readVueFile(fileContent, sourceURL) {
     const component = parseComponent(fileContent, { pad: 'line' });
     const result = {};
 
@@ -327,7 +328,15 @@ function readVueFile(fileContent) {
             const module = {
                 exports: {}
             };
-            const scriptFunction = new Function('module', 'exports', content);
+            /*
+               Add sourceURL directive - this helps browser dev tools show better error locations.
+               But only add it if not already present in the content (users can add it themselves if they want).
+            */
+            const hasSourceURL = /\/\/#\s*sourceURL\s*=/i.test(content);
+            const contentWithScriptPath = hasSourceURL
+                ? content
+                : content + `\n//# sourceURL=${sourceURL}`;
+            const scriptFunction = new Function('module', 'exports', contentWithScriptPath);
             scriptFunction(module, module.exports);
             result.SCRIPT = module.exports;
         } catch (error) {
