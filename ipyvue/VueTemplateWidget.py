@@ -1,5 +1,5 @@
 import os
-from traitlets import Any, Unicode, List, Dict, Union, Instance
+from traitlets import Any, Bool, Unicode, List, Dict, Union, Instance
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
 
@@ -117,6 +117,8 @@ class VueTemplate(DOMWidget, Events):
     )
 
     css = Unicode(None, allow_none=True).tag(sync=True)
+
+    scoped = Bool(None, allow_none=True).tag(sync=True)
 
     methods = Unicode(None, allow_none=True).tag(sync=True)
 

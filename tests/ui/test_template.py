@@ -141,3 +141,92 @@ def test_template_script(
     widget.wait_for()
     widget.click()
     page_session.locator("text=Clicked 1").wait_for()
+
+
+class ScopedStyleTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div class="scoped-container">
+                <span id="scoped-text" class="scoped-text">Scoped text</span>
+            </div>
+        </template>
+        <style scoped>
+            .scoped-text { color: rgb(255, 0, 0); }
+        </style>
+        """
+
+
+def test_template_scoped_style(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import ScopedStyleTemplate
+        import ipyvue as vue
+        import ipywidgets as widgets
+        from IPython.display import display
+
+        scoped = ScopedStyleTemplate()
+        unscoped = vue.Html(
+            tag="span",
+            children=["Unscoped text"],
+            class_="scoped-text",
+            attributes={"id": "unscoped-text"},
+        )
+        display(widgets.VBox([scoped, unscoped]))
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("#scoped-text").wait_for()
+    page_session.locator("#unscoped-text").wait_for()
+    scoped_color = page_session.eval_on_selector(
+        "#scoped-text", "el => getComputedStyle(el).color"
+    )
+    unscoped_color = page_session.eval_on_selector(
+        "#unscoped-text", "el => getComputedStyle(el).color"
+    )
+    assert scoped_color == "rgb(255, 0, 0)"
+    assert unscoped_color != "rgb(255, 0, 0)"
+
+
+class ScopedCssTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <span id="scoped-css-text" class="scoped-css-text">Scoped css text</span>
+        </template>
+        """
+
+
+def test_template_scoped_css_trait(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import ScopedCssTemplate
+        import ipyvue as vue
+        import ipywidgets as widgets
+        from IPython.display import display
+
+        scoped = ScopedCssTemplate(
+            css=".scoped-css-text { color: rgb(0, 128, 0); }", scoped=True
+        )
+        unscoped = vue.Html(
+            tag="span",
+            children=["Unscoped css text"],
+            class_="scoped-css-text",
+            attributes={"id": "unscoped-css-text"},
+        )
+        display(widgets.VBox([scoped, unscoped]))
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("#scoped-css-text").wait_for()
+    page_session.locator("#unscoped-css-text").wait_for()
+    scoped_color = page_session.eval_on_selector(
+        "#scoped-css-text", "el => getComputedStyle(el).color"
+    )
+    unscoped_color = page_session.eval_on_selector(
+        "#unscoped-css-text", "el => getComputedStyle(el).color"
+    )
+    assert scoped_color == "rgb(0, 128, 0)"
+    assert unscoped_color != "rgb(0, 128, 0)"
