@@ -9,6 +9,73 @@ import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
 import { TemplateModel } from './Template';
 
+function normalizeScopeId(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+function getScopeId(model, cssId) {
+    const base = cssId || model.cid;
+    return `data-s-${normalizeScopeId(base)}`;
+}
+
+function applyScopeId(vm, scopeId) {
+    if (!scopeId || !vm || !vm.$el) {
+        return;
+    }
+    vm.$el.setAttribute(scopeId, '');
+}
+
+function scopeStyleElement(styleElt, scopeId) {
+    const scopeSelector = `[${scopeId}]`;
+
+    function scopeRules(rules, insertRule, deleteRule) {
+        for (let i = 0; i < rules.length; ++i) {
+            const rule = rules[i];
+            if (rule.type === 1 && rule.selectorText) {
+                const scopedSelectors = [];
+                rule.selectorText.split(/\s*,\s*/).forEach((sel) => {
+                    scopedSelectors.push(`${scopeSelector} ${sel}`);
+                    const segments = sel.match(/([^ :]+)(.+)?/);
+                    if (segments) {
+                        scopedSelectors.push(`${segments[1]}${scopeSelector}${segments[2] || ''}`);
+                    }
+                });
+                const scopedRule = scopedSelectors.join(',') + rule.cssText.substring(rule.selectorText.length);
+                deleteRule(i);
+                insertRule(scopedRule, i);
+            }
+            if (rule.cssRules && rule.cssRules.length && rule.insertRule && rule.deleteRule) {
+                scopeRules(rule.cssRules, rule.insertRule.bind(rule), rule.deleteRule.bind(rule));
+            }
+        }
+    }
+
+    function process() {
+        const sheet = styleElt.sheet;
+        if (!sheet) {
+            return;
+        }
+        scopeRules(sheet.cssRules, sheet.insertRule.bind(sheet), sheet.deleteRule.bind(sheet));
+    }
+
+    try {
+        process();
+    } catch (ex) {
+        if (typeof DOMException !== 'undefined' && ex instanceof DOMException && ex.code === DOMException.INVALID_ACCESS_ERR) {
+            styleElt.sheet.disabled = true;
+            styleElt.addEventListener('load', function onStyleLoaded() {
+                styleElt.removeEventListener('load', onStyleLoaded);
+                setTimeout(() => {
+                    process();
+                    styleElt.sheet.disabled = false;
+                });
+            });
+            return;
+        }
+        throw ex;
+    }
+}
+
 export function vueTemplateRender(createElement, model, parentView) {
     return createElement(createComponentObject(model, parentView));
 }
@@ -32,6 +99,10 @@ function createComponentObject(model, parentView) {
 
     const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
     const cssId = (vuefile.STYLE && vuefile.STYLE.id);
+    const scopedFromTemplate = (vuefile.STYLE && vuefile.STYLE.scoped);
+    const scoped = model.get('scoped');
+    const useScoped = scoped !== null && scoped !== undefined ? scoped : scopedFromTemplate;
+    const scopeId = useScoped && css ? getScopeId(model, cssId) : null;
 
     if (css) {
         if (cssId) {
@@ -42,14 +113,32 @@ function createComponentObject(model, parentView) {
                 style.id = prefixedCssId;
                 document.head.appendChild(style);
             }
-            if (style.innerHTML !== css) {
-                style.innerHTML = css;
+            if (scopeId) {
+                if (style.innerHTML !== css || style.getAttribute('data-ipyvue-scope') !== scopeId) {
+                    style.innerHTML = css;
+                    scopeStyleElement(style, scopeId);
+                    style.setAttribute('data-ipyvue-scope', scopeId);
+                }
+            } else {
+                // Reset innerHTML if CSS changed or if transitioning from scoped to unscoped
+                // (need to reset to remove the scoped CSS rule transformations)
+                const wasScoped = style.getAttribute('data-ipyvue-scope');
+                if (style.innerHTML !== css || wasScoped) {
+                    style.innerHTML = css;
+                    if (wasScoped) {
+                        style.removeAttribute('data-ipyvue-scope');
+                    }
+                }
             }
         } else {
             const style = document.createElement('style');
             style.id = model.cid;
             style.innerHTML = css;
             document.head.appendChild(style);
+            if (scopeId) {
+                scopeStyleElement(style, scopeId);
+                style.setAttribute('data-ipyvue-scope', scopeId);
+            }
             parentView.once('remove', () => {
                 document.head.removeChild(style);
             });
@@ -106,15 +195,18 @@ function createComponentObject(model, parentView) {
             ? template
             : vuefile.TEMPLATE,
         beforeMount() {
+            applyScopeId(this, scopeId);
             callVueFn('beforeMount', this);
         },
         mounted() {
+            applyScopeId(this, scopeId);
             callVueFn('mounted', this);
         },
         beforeUpdate() {
             callVueFn('beforeUpdate', this);
         },
         updated() {
+            applyScopeId(this, scopeId);
             callVueFn('updated', this);
         },
         beforeDestroy() {
@@ -130,7 +222,7 @@ function createComponentObject(model, parentView) {
 function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
+            && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
             result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
@@ -140,7 +232,7 @@ function createDataMapping(model) {
 function addModelListeners(model, vueModel) {
     model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['v_model', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
+            && !['v_model', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
             if (_.isEqual(model.get(prop), vueModel[prop])) {
@@ -166,7 +258,7 @@ function addModelListeners(model, vueModel) {
 
 function createWatches(model, parentView, templateWatchers) {
     const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
-    && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
+    && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
     .reduce((result, prop) => ({
         ...result,
         [prop]: {
@@ -349,8 +441,10 @@ function readVueFile(fileContent) {
     }
     if (component.styles && component.styles.length > 0) {
         const { content } = component.styles[0];
-        const { id } = component.styles[0].attrs;
-        result.STYLE = { content, id };
+        const { attrs = {} } = component.styles[0];
+        const { id } = attrs;
+        const scoped = Object.prototype.hasOwnProperty.call(attrs, 'scoped');
+        result.STYLE = { content, id, scoped };
     }
 
     return result;
