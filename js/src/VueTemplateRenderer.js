@@ -101,7 +101,12 @@ function createComponentObject(model, parentView) {
     const cssId = (vuefile.STYLE && vuefile.STYLE.id);
     const scopedFromTemplate = (vuefile.STYLE && vuefile.STYLE.scoped);
     const scoped = model.get('scoped');
-    const useScoped = scoped !== null && scoped !== undefined ? scoped : scopedFromTemplate;
+    const scopedCssSupport = model.get('scoped_css_support');
+    // If scoped trait is explicitly set, use it (for css trait with scoped=True/False)
+    // If scoped is not set (None), only honor <style scoped> from template if scoped_css_support is enabled
+    const useScoped = scoped !== null && scoped !== undefined
+        ? scoped
+        : (scopedCssSupport && scopedFromTemplate);
     const scopeId = useScoped && css ? getScopeId(model, cssId) : null;
 
     if (css) {
@@ -222,7 +227,7 @@ function createComponentObject(model, parentView) {
 function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
+            && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
             result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
@@ -232,7 +237,7 @@ function createDataMapping(model) {
 function addModelListeners(model, vueModel) {
     model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['v_model', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
+            && !['v_model', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
             if (_.isEqual(model.get(prop), vueModel[prop])) {
@@ -258,7 +263,7 @@ function addModelListeners(model, vueModel) {
 
 function createWatches(model, parentView, templateWatchers) {
     const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
-    && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'data', 'methods'].includes(prop))
+    && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
     .reduce((result, prop) => ({
         ...result,
         [prop]: {
