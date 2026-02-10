@@ -167,7 +167,7 @@ def test_template_scoped_style(
         import ipywidgets as widgets
         from IPython.display import display
 
-        scoped = ScopedStyleTemplate()
+        scoped = ScopedStyleTemplate(scoped_css_support=True)
         unscoped = vue.Html(
             tag="span",
             children=["Unscoped text"],

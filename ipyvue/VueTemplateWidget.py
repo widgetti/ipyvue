@@ -1,5 +1,5 @@
 import os
-from traitlets import Any, Bool, Unicode, List, Dict, Union, Instance
+from traitlets import Any, Bool, Unicode, List, Dict, Union, Instance, default
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
 
@@ -8,6 +8,7 @@ from ._version import semver
 from .ForceLoad import force_load_instance
 import inspect
 from importlib import import_module
+import ipyvue
 
 OBJECT_REF = "objectRef"
 FUNCTION_REF = "functionRef"
@@ -119,6 +120,12 @@ class VueTemplate(DOMWidget, Events):
     css = Unicode(None, allow_none=True).tag(sync=True)
 
     scoped = Bool(None, allow_none=True).tag(sync=True)
+
+    scoped_css_support = Bool(allow_none=False).tag(sync=True)
+
+    @default("scoped_css_support")
+    def _default_scoped_css_support(self):
+        return ipyvue.scoped_css_support
 
     methods = Unicode(None, allow_none=True).tag(sync=True)
 
