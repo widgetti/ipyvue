@@ -70,3 +70,49 @@ def test_template_custom_event(solara_test, page_session: playwright.sync_api.Pa
     page_session.locator("text=Click Me").click()
     page_session.locator("text=Clicked").wait_for()
     assert last_event_data == "not-an-event-object"
+
+
+class ScopedStyleTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div class="scoped-container">
+                <span id="scoped-text" class="scoped-text">Scoped text</span>
+            </div>
+        </template>
+        <style scoped>
+            .scoped-text { color: rgb(255, 0, 0); }
+        </style>
+        """
+
+
+def test_template_scoped_style(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import ScopedStyleTemplate
+        import ipyvue as vue
+        import ipywidgets as widgets
+        from IPython.display import display
+
+        scoped = ScopedStyleTemplate()
+        unscoped = vue.Html(
+            tag="span",
+            children=["Unscoped text"],
+            class_="scoped-text",
+            attributes={"id": "unscoped-text"},
+        )
+        display(widgets.VBox([scoped, unscoped]))
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("#scoped-text").wait_for()
+    page_session.locator("#unscoped-text").wait_for()
+    scoped_color = page_session.eval_on_selector(
+        "#scoped-text", "el => getComputedStyle(el).color"
+    )
+    unscoped_color = page_session.eval_on_selector(
+        "#unscoped-text", "el => getComputedStyle(el).color"
+    )
+    assert scoped_color == "rgb(255, 0, 0)"
+    assert unscoped_color != "rgb(255, 0, 0)"

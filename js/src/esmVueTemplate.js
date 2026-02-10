@@ -1,16 +1,25 @@
 import * as Vue from 'vue'
-import { parse, compileScript, compileTemplate } from 'vue/compiler-sfc'
+import { parse, compileScript, compileTemplate, compileStyle } from 'vue/compiler-sfc'
 import esModuleShims from './es-module-shims-txt.js'
 import {transform} from "sucrase";
 
 window.esmsInitOptions = { shimMode: true };
+
+let scopeIdCounter = 0;
+function generateScopeId() {
+    return `data-v-${(++scopeIdCounter).toString(36)}`;
+}
 
 export async function compileSfc(sfcStr, mixin) {
     await init()
     const parsedTemplate = parse(sfcStr)
     const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
 
-    styles && styles.forEach(({content, attrs}) => {
+    // Check if any style block has scoped attribute
+    const hasScoped = styles && styles.some(s => s.scoped);
+    const scopeId = hasScoped ? generateScopeId() : null;
+
+    styles && styles.forEach(({content, attrs, scoped}) => {
         const prefixedCssId = attrs.id && `ipyvue-${attrs.id}`;
         let style = prefixedCssId && document.getElementById(prefixedCssId);
         if (!style) {
@@ -20,8 +29,23 @@ export async function compileSfc(sfcStr, mixin) {
             }
             document.head.appendChild(style);
         }
-        if (style.innerHTML !== content) {
-            style.innerHTML = content;
+
+        let cssContent = content;
+        if (scoped && scopeId) {
+            // Use Vue's compileStyle to transform scoped CSS
+            const compiled = compileStyle({
+                source: content,
+                id: scopeId,
+                scoped: true,
+            });
+            if (compiled.errors.length) {
+                console.warn('CSS compilation errors:', compiled.errors);
+            }
+            cssContent = compiled.code;
+        }
+
+        if (style.innerHTML !== cssContent) {
+            style.innerHTML = cssContent;
         }
     });
 
@@ -33,7 +57,7 @@ export async function compileSfc(sfcStr, mixin) {
             script.content = script.content.replace(/^[^{]+(?={)/, "export default ");
         }
     }
-    let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: "abc"});
+    let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: scopeId || "abc"});
 
     const code = compiledScript && (compiledScript.lang === "ts"
         ? transform(compiledScript.content, { transforms: ["typescript"] }).code
@@ -43,9 +67,12 @@ export async function compileSfc(sfcStr, mixin) {
 
     const compiledTemplate = template && compileTemplate({
         source: template.content,
+        id: scopeId || "abc",
+        scoped: hasScoped,
         compilerOptions: {
             bindingMetadata: compiledScript ? compiledScript.bindings : {},
             prefixIdentifiers: true,
+            scopeId: scopeId,
         }
     });
     if (compiledTemplate && compiledTemplate.tips.length) {
