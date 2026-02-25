@@ -246,10 +246,14 @@ function aliasRefProps(model) {
 }
 
 export function jupyterWidgetComponent() {
-    const component = Vue.shallowRef(null);
     return {
         props: ['widget'],
         inject: ['viewCtx'],
+        data() {
+            return {
+                component: null,
+            };
+        },
         created() {
             this.update();
         },
@@ -263,15 +267,15 @@ export function jupyterWidgetComponent() {
                 this.viewCtx
                     .getModelById(this.widget.substring(10))
                     .then((mdl) => {
-                        component.value = createComponentObject(mdl, this.viewCtx.getView());
+                        this.component = createComponentObject(mdl, this.viewCtx.getView());
                     });
             },
         },
         render() {
-            if (!component.value) {
+            if (!this.component) {
                 return Vue.h('div');
             }
-            return Vue.h(component.value);
+            return Vue.h(this.component);
         },
     }
 }

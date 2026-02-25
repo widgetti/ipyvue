@@ -30,7 +30,7 @@ export function createObjectForNestedModel(model, parentView) {
                     }
                 });
         },
-        beforeDestroy() {
+        beforeUnmount() {
             if (currentView) {
                 // In vue 3 we can use the beforeUnmount, which is called before the node is removed from the DOM
                 // In vue 2, we are already disconnected from the document at this stage, which phosphor does not like.
