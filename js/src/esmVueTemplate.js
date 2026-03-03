@@ -5,6 +5,40 @@ import {transform} from "sucrase";
 
 window.esmsInitOptions = { shimMode: true };
 
+function patchCompiledTemplateCode(code) {
+    /* Vuetify slot props can contain a Vue ref object in \`ref\`. Passing that through
+     * compiler-generated \`v-bind\`/merge helpers breaks Vue's prop normalization in
+     * ipyvue's runtime-compiled template path, so we strip only ref-shaped \`ref\` values.
+     */
+    if (!code.includes('_normalizeProps(_guardReactiveProps(') && !code.includes('_mergeProps(')) {
+        return code;
+    }
+
+    return [
+        `import { isRef as _ipyvueIsRef } from "vue"`,
+        `function _ipyvueSanitizeBoundProps(props) {`,
+        `    const guarded = typeof _guardReactiveProps === "function" ? _guardReactiveProps(props) : props;`,
+        `    if (!guarded || typeof guarded !== "object") {`,
+        `        return guarded;`,
+        `    }`,
+        `    if (_ipyvueIsRef(guarded.ref)) {`,
+        `        const { ref, ...rest } = guarded;`,
+        `        return rest;`,
+        `    }`,
+        `    return guarded;`,
+        `}`,
+        `function _ipyvueMergeProps(...args) {`,
+        `    if (!args.length) {`,
+        `        return _mergeProps();`,
+        `    }`,
+        `    return _mergeProps(...args.map((arg) => _ipyvueSanitizeBoundProps(arg)));`,
+        `}`,
+        code
+            .replaceAll('_normalizeProps(_guardReactiveProps(', '_normalizeProps(_ipyvueSanitizeBoundProps(')
+            .replaceAll('_mergeProps(', '_ipyvueMergeProps('),
+    ].join('\n');
+}
+
 export async function compileSfc(sfcStr, mixin) {
     await init()
     const parsedTemplate = parse(sfcStr)
@@ -52,7 +86,8 @@ export async function compileSfc(sfcStr, mixin) {
         console.warn(compiledTemplate.tips);
     }
 
-    const templateModule = compiledTemplate && (await toModule(compiledTemplate.code))
+    const templateCode = compiledTemplate && patchCompiledTemplateCode(compiledTemplate.code);
+    const templateModule = templateCode && (await toModule(templateCode));
     return {
         ...(template && templateModule),
         ...(setup && {setup}),
