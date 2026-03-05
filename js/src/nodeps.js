@@ -1,4 +1,7 @@
-export { default as Vue } from 'vue';
+import * as Vue from 'vue';
+
+export { Vue };
+export * from 'vue';
 export { VueModel } from './VueModel';
 export { VueTemplateModel } from './VueTemplateModel';
 export { VueView, createViewContext } from './VueView';
