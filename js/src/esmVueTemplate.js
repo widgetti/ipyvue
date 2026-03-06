@@ -1,5 +1,5 @@
 import * as Vue from 'vue'
-import { parse, compileScript, compileTemplate } from 'vue/compiler-sfc'
+import { parse, compileScript, compileStyle, compileTemplate } from 'vue/compiler-sfc'
 import esModuleShims from './es-module-shims-txt.js'
 import {transform} from "sucrase";
 
@@ -39,23 +39,42 @@ function patchCompiledTemplateCode(code) {
     ].join('\n');
 }
 
+function hashSfcId(source) {
+    let hash = 2166136261;
+    for (let i = 0; i < source.length; i += 1) {
+        hash ^= source.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `ipyvue-${(hash >>> 0).toString(36)}`;
+}
+
 export async function compileSfc(sfcStr, mixin) {
     await init()
     const parsedTemplate = parse(sfcStr)
     const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
+    const scopeId = hashSfcId(sfcStr);
+    const filename = `${scopeId}.vue`;
 
-    styles && styles.forEach(({content, attrs}) => {
-        const prefixedCssId = attrs.id && `ipyvue-${attrs.id}`;
-        let style = prefixedCssId && document.getElementById(prefixedCssId);
+    styles && styles.forEach(({content, scoped, attrs = {}, lang}, index) => {
+        const styleDomId = `ipyvue-style-${scopeId}-${index}`;
+        let style = document.getElementById(styleDomId);
         if (!style) {
             style = document.createElement('style');
-            if (prefixedCssId) {
-                style.id = prefixedCssId;
-            }
+            style.id = styleDomId;
             document.head.appendChild(style);
         }
-        if (style.innerHTML !== content) {
-            style.innerHTML = content;
+        const compiledStyle = compileStyle({
+            filename,
+            id: scopeId,
+            preprocessLang: lang,
+            scoped,
+            source: content,
+        });
+        if (compiledStyle.errors.length) {
+            console.warn(compiledStyle.errors);
+        }
+        if (style.innerHTML !== compiledStyle.code) {
+            style.innerHTML = compiledStyle.code;
         }
     });
 
@@ -67,7 +86,7 @@ export async function compileSfc(sfcStr, mixin) {
             script.content = script.content.replace(/^[^{]+(?={)/, "export default ");
         }
     }
-    let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: "abc"});
+    let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: scopeId});
 
     const code = compiledScript && (compiledScript.lang === "ts"
         ? transform(compiledScript.content, { transforms: ["typescript"] }).code
@@ -76,6 +95,9 @@ export async function compileSfc(sfcStr, mixin) {
     let {setup, ...rest} = code ? (await toModule(code)).default : {}
 
     const compiledTemplate = template && compileTemplate({
+        filename,
+        id: scopeId,
+        scoped: styles ? styles.some(({ scoped }) => scoped) : false,
         source: template.content,
         compilerOptions: {
             bindingMetadata: compiledScript ? compiledScript.bindings : {},
