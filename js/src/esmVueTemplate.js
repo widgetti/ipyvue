@@ -52,6 +52,7 @@ export async function compileSfc(sfcStr, mixin) {
     await init()
     const parsedTemplate = parse(sfcStr)
     const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
+    const hasScopedStyles = styles ? styles.some(({ scoped }) => scoped) : false;
     const scopeId = hashSfcId(sfcStr);
     const filename = `${scopeId}.vue`;
 
@@ -97,7 +98,7 @@ export async function compileSfc(sfcStr, mixin) {
     const compiledTemplate = template && compileTemplate({
         filename,
         id: scopeId,
-        scoped: styles ? styles.some(({ scoped }) => scoped) : false,
+        scoped: hasScopedStyles,
         source: template.content,
         compilerOptions: {
             bindingMetadata: compiledScript ? compiledScript.bindings : {},
@@ -113,6 +114,7 @@ export async function compileSfc(sfcStr, mixin) {
     return {
         ...(template && templateModule),
         ...(setup && {setup}),
+        ...(hasScopedStyles && { __scopeId: `data-v-${scopeId}` }),
         mixins: [rest || {}, mixin],
     };
 }
