@@ -208,9 +208,32 @@ function createSlots(model, vueModel, parentView, slotScopes) {
     }), {});
 }
 
+export function getScope(value, slotScopes) {
+    const [scopeName, ...parts] = value.split('.');
+    const scopeRoot = slotScopes && slotScopes[scopeName];
+    if (!scopeRoot) {
+        return undefined;
+    }
+
+    const resolvedScope = parts.reduce(
+        (scope, name) => scope && scope[name],
+        scopeRoot,
+    );
+    if (resolvedScope !== undefined) {
+        return resolvedScope;
+    }
+
+    // Vuetify 3 activator slots expose listeners under slotScope.props.
+    if (parts.length === 1 && parts[0] === 'on' && scopeRoot.props) {
+        return filterObject(scopeRoot.props, (key) => key.startsWith('on'));
+    }
+
+    return undefined;
+}
+
 function slotUseOn(model, slotScopes) {
     const vOnValue = model.get('v_on');
-    return vOnValue && filterObject(slotScopes[vOnValue.split('.')[0]].props, (key, value) => key.startsWith('on'))
+    return vOnValue && getScope(vOnValue, slotScopes);
 }
 
 function filterObject(obj, predicate) {
