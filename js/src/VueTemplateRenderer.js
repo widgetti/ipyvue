@@ -192,7 +192,7 @@ function createClassComponents(components, containerModel, parentView) {
                     containerModel.callbacks(parentView),
                 );
             },
-            destroyed() {
+            beforeUnmount() {
                 containerModel.send(
                     {
                         destroy_widget: this.id, // eslint-disable-line camelcase
