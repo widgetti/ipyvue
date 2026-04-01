@@ -60,6 +60,12 @@ export function createModelMixin(model, templateModel, parentView) {
             templateModel.on('change:template', this.__onTemplateChange);
             addModelListeners(model, this);
         },
+        beforeUnmount() {
+            if (this.__onTemplateChange) {
+                templateModel.off('change:template', this.__onTemplateChange);
+                this.__onTemplateChange = null;
+            }
+        },
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),
     });
