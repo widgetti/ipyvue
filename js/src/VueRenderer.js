@@ -154,7 +154,7 @@ function addListeners(model, vueModel) {
 function createAttrsMapping(model) {
     const useAsAttr = key => model.get(key) !== null
         && !key.startsWith('_')
-        && !['attributes', 'v_slots', 'v_on', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
+        && !['attributes', 'v_slots', 'v_bind', 'v_on', 'layout', 'children', 'slot', 'v_model', 'style_', 'class_'].includes(key);
 
     return model.keys()
         .filter(useAsAttr)
@@ -236,6 +236,11 @@ function slotUseOn(model, slotScopes) {
     return vOnValue && getScope(vOnValue, slotScopes);
 }
 
+function slotUseBind(model, slotScopes) {
+    const vBindValue = model.get('v_bind');
+    return vBindValue && getScope(vBindValue, slotScopes);
+}
+
 function filterObject(obj, predicate) {
     return Object.entries(obj)
         .filter(([key, value]) => predicate(key, value))
@@ -249,6 +254,7 @@ function createContent(model, vueModel, parentView, slotScopes) {
     }
 
     return {
+        ...slotUseBind(model, slotScopes),
         ...slotUseOn(model, slotScopes),
         ...createEventMapping(model, parentView),
         ...model.get('style_') && { style: model.get('style_') },

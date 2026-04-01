@@ -174,6 +174,8 @@ class VueWidget(DOMWidget, Events):
 
     v_slots = List(Dict()).tag(sync=True, **widget_serialization)
 
+    v_bind = Unicode(None, allow_none=True).tag(sync=True)
+
     v_on = Unicode(None, allow_none=True).tag(sync=True)
 
     def __init__(self, **kwargs):
