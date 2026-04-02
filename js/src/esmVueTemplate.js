@@ -48,22 +48,22 @@ function hashSfcId(source) {
     return `ipyvue-${(hash >>> 0).toString(36)}`;
 }
 
-export async function compileSfc(sfcStr, mixin) {
-    await init()
-    const parsedTemplate = parse(sfcStr)
-    const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
-    const hasScopedStyles = styles ? styles.some(({ scoped }) => scoped) : false;
-    const scopeId = hashSfcId(sfcStr);
-    const filename = `${scopeId}.vue`;
+function syncCompiledStyles(styles, { filename, ownerKey, scopeId }) {
+    const styleOwnerId = hashSfcId(String(ownerKey || scopeId));
+    const activeStyleIds = new Set();
 
-    styles && styles.forEach(({content, scoped, attrs = {}, lang}, index) => {
-        const styleDomId = `ipyvue-style-${scopeId}-${index}`;
+    styles.forEach(({ content, scoped, lang }, index) => {
+        const styleDomId = `ipyvue-style-${styleOwnerId}-${index}`;
+        activeStyleIds.add(styleDomId);
+
         let style = document.getElementById(styleDomId);
         if (!style) {
             style = document.createElement('style');
             style.id = styleDomId;
+            style.dataset.ipyvueStyleOwner = styleOwnerId;
             document.head.appendChild(style);
         }
+
         const compiledStyle = compileStyle({
             filename,
             id: scopeId,
@@ -77,6 +77,27 @@ export async function compileSfc(sfcStr, mixin) {
         if (style.innerHTML !== compiledStyle.code) {
             style.innerHTML = compiledStyle.code;
         }
+    });
+
+    document.querySelectorAll(`style[data-ipyvue-style-owner="${styleOwnerId}"]`).forEach((style) => {
+        if (!activeStyleIds.has(style.id)) {
+            style.remove();
+        }
+    });
+}
+
+export async function compileSfc(sfcStr, mixin, options = {}) {
+    await init()
+    const parsedTemplate = parse(sfcStr)
+    const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
+    const hasScopedStyles = styles ? styles.some(({ scoped }) => scoped) : false;
+    const scopeId = hashSfcId(sfcStr);
+    const filename = `${scopeId}.vue`;
+
+    syncCompiledStyles(styles || [], {
+        filename,
+        ownerKey: options.styleOwnerKey,
+        scopeId,
     });
 
     if (script) {
@@ -119,8 +140,8 @@ export async function compileSfc(sfcStr, mixin) {
     };
 }
 
-export function getAsyncComponent(sfcStr, mixin) {
-    return Vue.defineAsyncComponent(() => compileSfc(sfcStr, mixin));
+export function getAsyncComponent(sfcStr, mixin, options = {}) {
+    return Vue.defineAsyncComponent(() => compileSfc(sfcStr, mixin, options));
 }
 
 export async function addModule(name, module) {

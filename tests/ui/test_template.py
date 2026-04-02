@@ -1,5 +1,6 @@
 import pytest
 import sys
+import threading
 
 if sys.version_info < (3, 7):
     pytest.skip("requires python3.7 or higher", allow_module_level=True)
@@ -70,3 +71,55 @@ def test_template_custom_event(solara_test, page_session: playwright.sync_api.Pa
     page_session.locator("text=Click Me").click()
     page_session.locator("text=Clicked").wait_for()
     assert last_event_data == "not-an-event-object"
+
+
+class StyledTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_styled_template(self):
+        return """
+        <template>
+            <div class="style-leak-target">Styled</div>
+        </template>
+        <style>
+            .style-leak-target {
+                color: rgb(255, 0, 0);
+            }
+        </style>
+        """
+
+
+def test_template_style_update_replaces_old_styles(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    widget = StyledTemplate()
+
+    display(widget)
+
+    target = page_session.locator(".style-leak-target")
+    target.wait_for()
+    expect_red = """
+        () => {
+            const el = document.querySelector('.style-leak-target');
+            return el && getComputedStyle(el).color === 'rgb(255, 0, 0)';
+        }
+    """
+    page_session.wait_for_function(expect_red)
+
+    def update_template():
+        widget.template = """
+        <template>
+            <div class="style-leak-target">Unstyled</div>
+        </template>
+        """
+
+    threading.Timer(0.5, update_template).start()
+
+    page_session.locator("text=Unstyled").wait_for()
+    page_session.wait_for_function(
+        """
+        () => {
+            const el = document.querySelector('.style-leak-target');
+            return el && getComputedStyle(el).color !== 'rgb(255, 0, 0)';
+        }
+    """
+    )

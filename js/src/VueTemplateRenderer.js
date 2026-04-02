@@ -42,6 +42,9 @@ function createComponentObject(model, parentView) {
                 ...createClassComponents(classComponents, model, parentView),
                 ...createFullVueComponents(fullVueComponents),
             },
+        },
+        {
+            styleOwnerKey: `template-${templateModel.model_id}`,
         }
     );
 }

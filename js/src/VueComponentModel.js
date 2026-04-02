@@ -44,13 +44,17 @@ export class VueComponentModel extends DOMWidgetModel {
 
         const name = this.get('name');
 
-        this.compiledComponent = getAsyncComponent(this.get('component'), {});
+        this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
+            styleOwnerKey: `component-${this.model_id}`,
+        });
 
         apps.forEach(app => {
             app.component(name, this.compiledComponent);
         });
         this.on('change:component', () => {
-            this.compiledComponent = getAsyncComponent(this.get('component'), {});
+            this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
+                styleOwnerKey: `component-${this.model_id}`,
+            });
             apps.forEach(app => {
                 app.component(name, this.compiledComponent);
             });
