@@ -10,5 +10,6 @@ export { TemplateModel } from './Template';
 export { ForceLoadModel } from './ForceLoad';
 export { vueRender, getScope } from './VueRenderer';
 export { VueComponentModel } from './VueComponentModel';
+export { getAsyncComponent, addModule } from './esmVueTemplate';
 
 export { version } from './version';
