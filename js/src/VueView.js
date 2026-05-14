@@ -1,7 +1,6 @@
 import { DOMWidgetView } from '@jupyter-widgets/base';
 import * as Vue from 'vue';
 import { vueRender } from './VueRenderer';
-import { jupyterWidgetComponent } from './VueTemplateRenderer';
 import {addApp, removeApp} from "./VueComponentModel";
 
 window.Vue = Vue;
@@ -43,7 +42,6 @@ export class VueView extends DOMWidgetView {
             });
 
             addApp(this.vueApp, this.model.widget_manager);
-            this.vueApp.component('jupyter-widget', jupyterWidgetComponent())
             this.addPlugins(this.vueApp);
             this.vueApp.mount(this.el);
         })()

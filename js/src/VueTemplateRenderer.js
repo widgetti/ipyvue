@@ -276,7 +276,7 @@ export function jupyterWidgetComponent() {
                 this.viewCtx
                     .getModelById(this.widget.substring(10))
                     .then((mdl) => {
-                        this.component = createComponentObject(mdl, this.viewCtx.getView());
+                        this.component = Vue.markRaw(createComponentObject(mdl, this.viewCtx.getView()));
                     });
             },
         },

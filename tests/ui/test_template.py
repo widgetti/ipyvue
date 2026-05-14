@@ -6,10 +6,11 @@ if sys.version_info < (3, 7):
     pytest.skip("requires python3.7 or higher", allow_module_level=True)
 
 import ipyvue as vue
+import ipywidgets as widgets
 import playwright.sync_api
 
 from IPython.display import display
-from traitlets import default, Int, Callable, Unicode
+from traitlets import default, Any, Int, Callable, Unicode
 
 
 class MyTemplate(vue.VueTemplate):
@@ -38,6 +39,36 @@ def test_template(ipywidgets_runner, page_session: playwright.sync_api.Page):
     widget.wait_for()
     widget.click()
     page_session.locator("text=Clicked 1").wait_for()
+
+
+class EmbedsWidgetTemplate(vue.VueTemplate):
+    child = Any().tag(sync=True, **widgets.widget_serialization)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div>
+                <jupyter-widget :widget="child"></jupyter-widget>
+            </div>
+        </template>
+        """
+
+
+def test_template_embeds_jupyter_widget(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import EmbedsWidgetTemplate
+        import ipywidgets as widgets
+
+        widget = EmbedsWidgetTemplate(
+            child=widgets.IntSlider(description="Embedded slider", value=7)
+        )
+        display(widget)
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("text=Embedded slider").wait_for()
 
 
 class MyEventTemplate(vue.VueTemplate):

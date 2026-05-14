@@ -1,26 +1,50 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel } from '@jupyter-widgets/base';
 import {TemplateModel} from './Template';
+import { jupyterWidgetComponent } from './VueTemplateRenderer';
 import {getAsyncComponent} from "./esmVueTemplate";
 import { version } from './version';
 
 const apps = new Set();
+const appsWithBaseComponents = new WeakSet();
+const registeredComponentsByApp = new WeakMap();
 
 export function addApp(app, widget_manager) {
     apps.add(app);
-    (async () => {
-        const models = await Promise.all(Object.values(widget_manager._models));
-        models
-            .filter(model => model instanceof VueComponentModel)
-            .forEach(model => {
-                const name = model.get('name');
-                app.component(name, model.compiledComponent);
-            })
-    })();
+
+    if (!appsWithBaseComponents.has(app)) {
+        app.component('jupyter-widget', jupyterWidgetComponent());
+        appsWithBaseComponents.add(app);
+    }
+
+    return syncComponentModels(app, widget_manager);
+}
+
+async function syncComponentModels(app, widget_manager) {
+    const models = await Promise.all(Object.values(widget_manager._models));
+    models
+        .filter(model => model instanceof VueComponentModel)
+        .forEach(model => registerComponentModel(app, model))
 }
 
 export function removeApp(app) {
     apps.delete(app);
+}
+
+function registerComponentModel(app, model) {
+    let registeredComponents = registeredComponentsByApp.get(app);
+    if (!registeredComponents) {
+        registeredComponents = new Map();
+        registeredComponentsByApp.set(app, registeredComponents);
+    }
+
+    if (registeredComponents.get(model.model_id) === model.compiledComponent) {
+        return;
+    }
+
+    const name = model.get('name');
+    app.component(name, model.compiledComponent);
+    registeredComponents.set(model.model_id, model.compiledComponent);
 }
 
 export class VueComponentModel extends DOMWidgetModel {
@@ -48,16 +72,12 @@ export class VueComponentModel extends DOMWidgetModel {
             styleOwnerKey: `component-${this.model_id}`,
         });
 
-        apps.forEach(app => {
-            app.component(name, this.compiledComponent);
-        });
+        apps.forEach(app => registerComponentModel(app, this));
         this.on('change:component', () => {
             this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
                 styleOwnerKey: `component-${this.model_id}`,
             });
-            apps.forEach(app => {
-                app.component(name, this.compiledComponent);
-            });
+            apps.forEach(app => registerComponentModel(app, this));
 
             (async () => {
                 const models = await Promise.all(Object.values(widget_manager._models));
