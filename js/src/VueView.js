@@ -18,6 +18,23 @@ export function createViewContext(view) {
 }
 
 export class VueView extends DOMWidgetView {
+    vueComponent() {
+        const view = this;
+        return {
+            provide: {
+                viewCtx: createViewContext(view),
+            },
+            setup: () => {
+                view.onSetup();
+                return () => vueRender(view.model, view, {});
+            },
+        };
+    }
+
+    vueRender() {
+        return Vue.h(this.vueComponent());
+    }
+
     remove() {
         this.vueApp.unmount();
         removeApp(this.vueApp);
@@ -31,15 +48,7 @@ export class VueView extends DOMWidgetView {
             await this.displayed;
             await br;
 
-            this.vueApp = Vue.createApp({
-                provide: {
-                    viewCtx: createViewContext(this),
-                },
-                setup: () => {
-                    this.onSetup();
-                    return () => vueRender(this.model, this, {});
-                }
-            });
+            this.vueApp = Vue.createApp(this.vueComponent());
 
             addApp(this.vueApp, this.model.widget_manager);
             this.addPlugins(this.vueApp);
