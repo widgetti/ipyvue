@@ -117,13 +117,13 @@ class Events(object):
         Note that this does not trigger a click event in the browser, this only
         invokes the Python event handlers.
         """
-        self.fire_event("click", data or {})
+        self.fire_event("click", data)
 
     def _fire_event(self, event, data=None):
         dispatcher = self._event_handlers_map[event]
         # we don't call via the dispatcher, since that eats exceptions
         for callback in dispatcher.callbacks:
-            callback(self, event, data or {})
+            callback(self, event, data)
 
     def _handle_event(self, _, content, buffers):
         event = content.get("event", "")

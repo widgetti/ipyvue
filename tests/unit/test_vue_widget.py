@@ -77,3 +77,11 @@ def test_event_handling():
     event_handler.reset_mock()
     button._handle_event(None, dict(event="click.stop", data={"foo": "bar"}), [])
     event_handler.assert_called_once_with(button, "click.stop", {"foo": "bar"})
+
+    event_handler.reset_mock()
+    button._handle_event(None, dict(event="click.stop", data=0), [])
+    event_handler.assert_called_once_with(button, "click.stop", 0)
+
+    event_handler.reset_mock()
+    button.click(False)
+    event_handler.assert_called_once_with(button, "click.stop", False)
