@@ -1,9 +1,13 @@
 name: Build
 
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
+  workflow_dispatch:
 
 env:
   PKG_URL: https://nbg1.your-objectstorage.com/ipyvue3-packages/packages
