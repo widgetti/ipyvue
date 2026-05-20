@@ -105,8 +105,8 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
         /* For backward compatibility, if module(s).export is used, replace everything before the first { with
          * export default
          */
-        if (/modules?\.export.*?{/.test(script.content)) {
-            script.content = script.content.replace(/^[^{]+(?={)/, "export default ");
+        if (/modules?\.exports?\s*=/.test(script.content)) {
+            script.content = script.content.replace(/modules?\.exports?\s*=/, "export default ");
         }
     }
     let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: scopeId});
