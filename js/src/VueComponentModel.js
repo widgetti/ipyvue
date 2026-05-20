@@ -57,6 +57,7 @@ export class VueComponentModel extends DOMWidgetModel {
                 _model_module_version: version,
                 name: null,
                 component: null,
+                source_url: null,
             },
         };
     }
@@ -68,15 +69,18 @@ export class VueComponentModel extends DOMWidgetModel {
 
         const name = this.get('name');
 
-        this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
-            styleOwnerKey: `component-${this.model_id}`,
-        });
+        const compileComponent = () => {
+            this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
+                styleOwnerKey: `component-${this.model_id}`,
+                sourceURL: this.get('source_url') || `ipyvue-component-${this.model_id}.vue`,
+            });
+        };
+
+        compileComponent();
 
         apps.forEach(app => registerComponentModel(app, this));
         this.on('change:component', () => {
-            this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
-                styleOwnerKey: `component-${this.model_id}`,
-            });
+            compileComponent();
             apps.forEach(app => registerComponentModel(app, this));
 
             (async () => {
@@ -110,6 +114,10 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 affectedTemplateModels.forEach(model => model.trigger('change:template'));
             })();
+        });
+        this.on('change:source_url', () => {
+            compileComponent();
+            apps.forEach(app => registerComponentModel(app, this));
         });
     }
 }

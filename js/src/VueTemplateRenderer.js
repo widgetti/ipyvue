@@ -45,6 +45,7 @@ function createComponentObject(model, parentView) {
         },
         {
             styleOwnerKey: `template-${templateModel.model_id}`,
+            sourceURL: templateModel.get('source_url') || `ipyvue-template-${templateModel.model_id}.vue`,
         }
     );
 }
@@ -61,11 +62,13 @@ export function createModelMixin(model, templateModel, parentView) {
                 this.$root.$forceUpdate();
             };
             templateModel.on('change:template', this.__onTemplateChange);
+            templateModel.on('change:source_url', this.__onTemplateChange);
             addModelListeners(model, this);
         },
         beforeUnmount() {
             if (this.__onTemplateChange) {
                 templateModel.off('change:template', this.__onTemplateChange);
+                templateModel.off('change:source_url', this.__onTemplateChange);
                 this.__onTemplateChange = null;
             }
         },
@@ -234,7 +237,9 @@ function createClassComponents(components, containerModel, parentView) {
 function createFullVueComponents(components) {
     return components.reduce((accumulator, [componentName, vueFile]) => ({
         ...accumulator,
-        [componentName]: getAsyncComponent(vueFile, {}),
+        [componentName]: getAsyncComponent(vueFile, {}, {
+            sourceURL: `ipyvue-component-${componentName}.vue`,
+        }),
     }), {});
 }
 

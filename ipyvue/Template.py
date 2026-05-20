@@ -23,6 +23,9 @@ def watch(paths=""):
                     log.info(f"updating: {event.src_path}")
                     with open(event.src_path) as f:
                         template_registry[event.src_path].template = f.read()
+                        template_registry[event.src_path].source_url = os.path.basename(
+                            event.src_path
+                        )
                 elif event.src_path in vue_component_files:
                     log.info(f"updating component: {event.src_path}")
                     name = vue_component_files[event.src_path]
@@ -45,11 +48,12 @@ def get_template(abs_path):
     abs_path = os.path.normpath(abs_path)
     if abs_path not in template_registry:
         with open(abs_path, encoding="utf-8") as f:
-            tw = Template(template=f.read())
+            tw = Template(template=f.read(), source_url=os.path.basename(abs_path))
             template_registry[abs_path] = tw
     else:
         with open(abs_path, encoding="utf-8") as f:
             template_registry[abs_path].template = f.read()
+            template_registry[abs_path].source_url = os.path.basename(abs_path)
     return template_registry[abs_path]
 
 
@@ -59,6 +63,7 @@ class Template(Widget):
     _model_module_version = Unicode(semver).tag(sync=True)
 
     template = Unicode(None, allow_none=True).tag(sync=True)
+    source_url = Unicode(None, allow_none=True).tag(sync=True)
 
 
 __all__ = ["Template", "watch"]

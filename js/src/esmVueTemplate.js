@@ -88,11 +88,12 @@ function syncCompiledStyles(styles, { filename, ownerKey, scopeId }) {
 
 export async function compileSfc(sfcStr, mixin, options = {}) {
     await init()
+    const scopeId = hashSfcId(sfcStr);
+    const sourceURL = options.sourceURL || options.filename || `${scopeId}.vue`;
+    const filename = options.filename || sourceURL;
     const parsedTemplate = parse(sfcStr)
     const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
     const hasScopedStyles = styles ? styles.some(({ scoped }) => scoped) : false;
-    const scopeId = hashSfcId(sfcStr);
-    const filename = `${scopeId}.vue`;
 
     syncCompiledStyles(styles || [], {
         filename,
@@ -114,7 +115,7 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
         ? transform(compiledScript.content, { transforms: ["typescript"] }).code
         : compiledScript.content);
 
-    let {setup, ...rest} = code ? (await toModule(code)).default : {}
+    let {setup, ...rest} = code ? (await toModule(code, `${sourceURL}?script`)).default : {}
 
     const compiledTemplate = template && compileTemplate({
         filename,
@@ -131,7 +132,7 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
     }
 
     const templateCode = compiledTemplate && patchCompiledTemplateCode(compiledTemplate.code);
-    const templateModule = templateCode && (await toModule(templateCode));
+    const templateModule = templateCode && (await toModule(templateCode, `${sourceURL}?template`));
     return {
         ...(template && templateModule),
         ...(setup && {setup}),
@@ -201,8 +202,28 @@ function expose(module) {
         export { ${names} };`)
 }
 
-function toModule(code) {
-    return importShim(toModuleUrl(code));
+function hasSourceURL(code) {
+    return /\/\/#\s*sourceURL\s*=/i.test(code);
+}
+
+function withSourceURL(code, sourceURL) {
+    if (!sourceURL || hasSourceURL(code)) {
+        return code;
+    }
+    return `${code}\n//# sourceURL=${normalizeSourceURL(sourceURL)}`;
+}
+
+function normalizeSourceURL(sourceURL) {
+    try {
+        new URL(sourceURL);
+        return sourceURL;
+    } catch (error) {
+        return `ipyvue:///${encodeURI(sourceURL).replace(/#/g, '%23')}`;
+    }
+}
+
+function toModule(code, sourceURL) {
+    return importShim(toModuleUrl(withSourceURL(code, sourceURL)));
 }
 
 function toModuleUrl(code) {
