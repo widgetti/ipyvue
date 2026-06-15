@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   code-quality:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install Python
@@ -32,7 +32,7 @@ jobs:
         uses: rbialon/flake8-annotations@v1
 
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -99,7 +99,7 @@ jobs:
 
   test:
     needs: [build]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +132,7 @@ jobs:
 
   ui-test:
     needs: [build]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -168,10 +168,34 @@ jobs:
           name: ipyvue-test-results
           path: test-results
 
+  release-dry-run:
+    needs: [test, ui-test, code-quality]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ipyvue-dist-${{ github.run_number }}
+
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish the NPM package
+        run: |
+          cd js
+          echo $PRE_RELEASE
+          if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
+          npm publish --dry-run --tag ${TAG} --access public *.tgz
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRE_RELEASE: ${{ github.event.release.prerelease }}
+
   release:
     if: startsWith(github.event.ref, 'refs/tags/v')
-    needs: [test,ui-test,code-quality]
-    runs-on: ubuntu-22.04
+    needs: [release-dry-run]
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
         with:

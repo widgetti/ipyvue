@@ -26,6 +26,28 @@ For a development installation (requires npm),
     $ jupyter nbextension enable --py --sys-prefix ipyvue
     $ jupyter labextension develop . --overwrite
 
+Scoped CSS Support
+------------------
+
+`<style scoped>` in `VueTemplate` templates is supported. Scoped CSS rules only apply
+to the component's own elements.
+
+```python
+from ipyvue import VueTemplate
+
+class MyComponent(VueTemplate):
+    template = """
+    <template>
+        <span class="styled">Hello</span>
+    </template>
+    <style scoped>
+        .styled { color: red; }
+    </style>
+    """
+
+widget = MyComponent()
+```
+
 Sponsors
 --------
 

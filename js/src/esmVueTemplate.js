@@ -39,6 +39,32 @@ function patchCompiledTemplateCode(code) {
     ].join('\n');
 }
 
+function normalizeOptionsScript(scriptContent) {
+    const commonJsAssignment = /modules?\.exports?\s*=/;
+    const commonJsMatch = commonJsAssignment.exec(scriptContent);
+    if (commonJsMatch) {
+        return `export default ${scriptContent.slice(commonJsMatch.index + commonJsMatch[0].length)}`;
+    }
+
+    if (!/\b(import|export)\b/.test(scriptContent)) {
+        const optionsStart = scriptContent.indexOf('{');
+        if (optionsStart !== -1) {
+            return `export default ${scriptContent.slice(optionsStart)}`;
+        }
+    }
+
+    return scriptContent;
+}
+
+function normalizeClassicScriptsInSfc(sfcStr) {
+    return sfcStr.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, content) => {
+        if (/\bsetup\b/.test(attrs)) {
+            return match;
+        }
+        return `<script${attrs}>${normalizeOptionsScript(content)}</script>`;
+    });
+}
+
 function hashSfcId(source) {
     let hash = 2166136261;
     for (let i = 0; i < source.length; i += 1) {
@@ -91,7 +117,7 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
     const scopeId = hashSfcId(sfcStr);
     const sourceURL = options.sourceURL || options.filename || `${scopeId}.vue`;
     const filename = options.filename || sourceURL;
-    const parsedTemplate = parse(sfcStr)
+    const parsedTemplate = parse(normalizeClassicScriptsInSfc(sfcStr))
     const { descriptor: {script, scriptSetup, template, styles} } = parsedTemplate;
     const hasScopedStyles = styles ? styles.some(({ scoped }) => scoped) : false;
 
@@ -101,14 +127,6 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
         scopeId,
     });
 
-    if (script) {
-        /* For backward compatibility, if module(s).export is used, replace everything before the first { with
-         * export default
-         */
-        if (/modules?\.exports?\s*=/.test(script.content)) {
-            script.content = script.content.replace(/modules?\.exports?\s*=/, "export default ");
-        }
-    }
     let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: scopeId});
 
     const code = compiledScript && (compiledScript.lang === "ts"

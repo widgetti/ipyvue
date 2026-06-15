@@ -154,3 +154,118 @@ def test_template_style_update_replaces_old_styles(
         }
     """
     )
+
+
+class MyTemplateScript(vue.VueTemplate):
+    clicks = Int(0).tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div @click="click">Clicked {{clicks}}</div>
+        </template>
+        <script>
+            /* test { and } in a comment, which fails in ipyvue <= 1.12.2 */
+            module.exports = {
+                methods: {
+                    click() {
+                        this.clicks += 1
+                    }
+                }
+            }
+        </script>
+        """
+
+
+class MyTemplateScriptOld(vue.VueTemplate):
+    clicks = Int(0).tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div @click="click">Clicked {{clicks}}</div>
+        </template>
+        <script>
+            /* in ipyvue <= 1.12.2, you could put anything before
+               the first curly open */
+            foo.bar = {
+                methods: {
+                    click() {
+                        this.clicks += 1
+                    }
+                }
+            }
+        </script>
+        """
+
+
+@pytest.mark.parametrize(
+    "template_class_name", ["MyTemplateScript", "MyTemplateScriptOld"]
+)
+def test_template_script(
+    ipywidgets_runner, page_session: playwright.sync_api.Page, template_class_name
+):
+    def kernel_code(template_class_name=template_class_name):
+        from test_template import MyTemplateScript, MyTemplateScriptOld
+
+        template_class = {
+            "MyTemplateScript": MyTemplateScript,
+            "MyTemplateScriptOld": MyTemplateScriptOld,
+        }[template_class_name]
+
+        widget = template_class()
+        display(widget)
+
+    ipywidgets_runner(kernel_code, {"template_class_name": template_class_name})
+    widget = page_session.locator("text=Clicked 0")
+    widget.wait_for()
+    widget.click()
+    page_session.locator("text=Clicked 1").wait_for()
+
+
+class ScopedStyleTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div class="scoped-container">
+                <span id="scoped-text" class="scoped-text">Scoped text</span>
+            </div>
+        </template>
+        <style scoped>
+            .scoped-text { color: rgb(255, 0, 0); }
+        </style>
+        """
+
+
+def test_template_scoped_style(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import ScopedStyleTemplate
+        import ipyvue as vue
+        import ipywidgets as widgets
+        from IPython.display import display
+
+        scoped = ScopedStyleTemplate()
+        unscoped = vue.Html(
+            tag="span",
+            children=["Unscoped text"],
+            class_="scoped-text",
+            attributes={"id": "unscoped-text"},
+        )
+        display(widgets.VBox([scoped, unscoped]))
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("#scoped-text").wait_for()
+    page_session.locator("#unscoped-text").wait_for()
+    scoped_color = page_session.eval_on_selector(
+        "#scoped-text", "el => getComputedStyle(el).color"
+    )
+    unscoped_color = page_session.eval_on_selector(
+        "#unscoped-text", "el => getComputedStyle(el).color"
+    )
+    assert scoped_color == "rgb(255, 0, 0)"
+    assert unscoped_color != "rgb(255, 0, 0)"

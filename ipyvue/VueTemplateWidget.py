@@ -156,9 +156,9 @@ class VueTemplate(DOMWidget, Events):
     def __init__(self, *args, **kwargs):
         if self.template_file:
             abs_path = ""
-            if type(self.template_file) == str:
+            if isinstance(self.template_file, str):
                 abs_path = os.path.abspath(self.template_file)
-            elif type(self.template_file) == tuple:
+            elif isinstance(self.template_file, tuple):
                 rel_file, path = self.template_file
                 abs_path = os.path.join(os.path.dirname(rel_file), path)
 
