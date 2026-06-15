@@ -155,18 +155,27 @@ export async function addModule(name, module) {
 }
 
 let _init_promise = null;
+let _vue_module_url = null;
+function vueModuleUrl() {
+    if (!_vue_module_url) {
+        _vue_module_url = expose(Vue);
+    }
+    return _vue_module_url;
+}
+
+function addVueImportMap() {
+    importShim.addImportMap({
+        "imports": {
+            "vue": vueModuleUrl(),
+        },
+    });
+}
+
 async function init() {
     if (!_init_promise) {
         _init_promise = (async () => {
             await loadShim();
-            importShim.addImportMap({
-                "imports": {
-                    "vue": expose(Vue),
-                    // "canvas-confetti@1": "https://esm.sh/canvas-confetti@1"
-                    // ...importMapWidget["imports"]
-                },
-                // "scopes": importMapWidget["scopes"]
-            });
+            addVueImportMap();
         })();
     }
     return _init_promise;
@@ -223,6 +232,9 @@ function normalizeSourceURL(sourceURL) {
 }
 
 function toModule(code, sourceURL) {
+    // Solara may update the import map after ipyvue initialized. Compiled SFC
+    // blobs import "vue", so refresh this entry before importing each module.
+    addVueImportMap();
     return importShim(toModuleUrl(withSourceURL(code, sourceURL)));
 }
 
