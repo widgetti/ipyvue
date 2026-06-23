@@ -72,6 +72,12 @@ def _class_to_json(x, obj):
     return {k: _value_to_json(v, obj) for k, v in x.items()}
 
 
+def _template_to_json(template_value, obj):
+    if isinstance(template_value, Template):
+        return template_value.template
+    return widget_serialization["to_json"](template_value, obj)
+
+
 def as_refs(name, data):
     def to_ref_structure(obj, path):
         if isinstance(obj, list):
@@ -125,7 +131,9 @@ class VueTemplate(DOMWidget, Events):
     _model_module_version = Unicode(semver).tag(sync=True)
 
     template = Union([Instance(Template), Unicode()]).tag(
-        sync=True, **widget_serialization
+        sync=True,
+        to_json=_template_to_json,
+        from_json=widget_serialization["from_json"],
     )
 
     css = TraitNotAvailable(
