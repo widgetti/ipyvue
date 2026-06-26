@@ -46,15 +46,27 @@ def watch(paths=""):
 
 def get_template(abs_path):
     abs_path = os.path.normpath(abs_path)
-    if abs_path not in template_registry:
-        with open(abs_path, encoding="utf-8") as f:
-            tw = Template(template=f.read(), source_url=os.path.basename(abs_path))
-            template_registry[abs_path] = tw
+    with open(abs_path, encoding="utf-8") as f:
+        template_text = f.read()
+
+    template = template_registry.get(abs_path)
+
+    if template is None:
+        template = Template(
+            template=template_text, source_url=os.path.basename(abs_path)
+        )
+        comm = template.comm
+        # A template with DummyComm was never sent to the frontend, so a later
+        # widget reference to its model id cannot be resolved by the widget manager.
+        if (
+            comm is not None
+            and type(comm).__name__ != "DummyComm"
+            and (not hasattr(comm, "kernel") or comm.kernel is not None)
+        ):
+            template_registry[abs_path] = template
     else:
-        with open(abs_path, encoding="utf-8") as f:
-            template_registry[abs_path].template = f.read()
-            template_registry[abs_path].source_url = os.path.basename(abs_path)
-    return template_registry[abs_path]
+        template.template = template_text
+    return template
 
 
 class Template(Widget):
