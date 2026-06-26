@@ -29,21 +29,8 @@ For a development installation (requires npm),
 Scoped CSS Support
 ------------------
 
-`<style scoped>` in `VueTemplate` templates is supported but disabled by default for backwards
-compatibility. When enabled, CSS rules only apply to the component's own elements.
-
-Enable globally via environment variable:
-
-    $ IPYVUE_SCOPED_CSS_SUPPORT=1 jupyter lab
-
-Or in Python:
-
-```python
-import ipyvue
-ipyvue.scoped_css_support = True
-```
-
-Or per widget:
+`<style scoped>` in `VueTemplate` templates is supported. Scoped CSS rules only apply
+to the component's own elements.
 
 ```python
 from ipyvue import VueTemplate
@@ -58,17 +45,7 @@ class MyComponent(VueTemplate):
     </style>
     """
 
-widget = MyComponent(scoped_css_support=True)
-```
-
-Note: The `css` trait with `scoped=True` always works, regardless of this setting:
-
-```python
-widget = VueTemplate(
-    template="<template><span class='x'>Hi</span></template>",
-    css=".x { color: blue; }",
-    scoped=True
-)
+widget = MyComponent()
 ```
 
 Sponsors

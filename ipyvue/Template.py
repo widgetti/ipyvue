@@ -23,6 +23,9 @@ def watch(paths=""):
                     log.info(f"updating: {event.src_path}")
                     with open(event.src_path) as f:
                         template_registry[event.src_path].template = f.read()
+                        template_registry[event.src_path].source_url = os.path.basename(
+                            event.src_path
+                        )
                 elif event.src_path in vue_component_files:
                     log.info(f"updating component: {event.src_path}")
                     name = vue_component_files[event.src_path]
@@ -43,14 +46,27 @@ def watch(paths=""):
 
 def get_template(abs_path):
     abs_path = os.path.normpath(abs_path)
-    if abs_path not in template_registry:
-        with open(abs_path, encoding="utf-8") as f:
-            tw = Template(template=f.read())
-            template_registry[abs_path] = tw
+    with open(abs_path, encoding="utf-8") as f:
+        template_text = f.read()
+
+    template = template_registry.get(abs_path)
+
+    if template is None:
+        template = Template(
+            template=template_text, source_url=os.path.basename(abs_path)
+        )
+        comm = template.comm
+        # A template with DummyComm was never sent to the frontend, so a later
+        # widget reference to its model id cannot be resolved by the widget manager.
+        if (
+            comm is not None
+            and type(comm).__name__ != "DummyComm"
+            and (not hasattr(comm, "kernel") or comm.kernel is not None)
+        ):
+            template_registry[abs_path] = template
     else:
-        with open(abs_path, encoding="utf-8") as f:
-            template_registry[abs_path].template = f.read()
-    return template_registry[abs_path]
+        template.template = template_text
+    return template
 
 
 class Template(Widget):
@@ -59,6 +75,7 @@ class Template(Widget):
     _model_module_version = Unicode(semver).tag(sync=True)
 
     template = Unicode(None, allow_none=True).tag(sync=True)
+    source_url = Unicode(None, allow_none=True).tag(sync=True)
 
 
 __all__ = ["Template", "watch"]

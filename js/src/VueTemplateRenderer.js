@@ -1,90 +1,22 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import uuid4 from 'uuid/v4';
 import _ from 'lodash';
-import Vue from 'vue';
-import { parseComponent } from '@mariobuikhuizen/vue-compiler-addon';
+import * as Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
-import httpVueLoader from './httpVueLoader';
 import { TemplateModel } from './Template';
+import {getAsyncComponent} from "./esmVueTemplate";
 
-function normalizeScopeId(value) {
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
-}
-
-function getScopeId(model, cssId) {
-    const base = cssId || model.cid;
-    return `data-s-${normalizeScopeId(base)}`;
-}
-
-function applyScopeId(vm, scopeId) {
-    if (!scopeId || !vm || !vm.$el) {
-        return;
-    }
-    vm.$el.setAttribute(scopeId, '');
-}
-
-function scopeStyleElement(styleElt, scopeId) {
-    const scopeSelector = `[${scopeId}]`;
-
-    function scopeRules(rules, insertRule, deleteRule) {
-        for (let i = 0; i < rules.length; ++i) {
-            const rule = rules[i];
-            if (rule.type === 1 && rule.selectorText) {
-                const scopedSelectors = [];
-                rule.selectorText.split(/\s*,\s*/).forEach((sel) => {
-                    scopedSelectors.push(`${scopeSelector} ${sel}`);
-                    const segments = sel.match(/([^ :]+)(.+)?/);
-                    if (segments) {
-                        scopedSelectors.push(`${segments[1]}${scopeSelector}${segments[2] || ''}`);
-                    }
-                });
-                const scopedRule = scopedSelectors.join(',') + rule.cssText.substring(rule.selectorText.length);
-                deleteRule(i);
-                insertRule(scopedRule, i);
-            }
-            if (rule.cssRules && rule.cssRules.length && rule.insertRule && rule.deleteRule) {
-                scopeRules(rule.cssRules, rule.insertRule.bind(rule), rule.deleteRule.bind(rule));
-            }
-        }
-    }
-
-    function process() {
-        const sheet = styleElt.sheet;
-        if (!sheet) {
-            return;
-        }
-        scopeRules(sheet.cssRules, sheet.insertRule.bind(sheet), sheet.deleteRule.bind(sheet));
-    }
-
-    try {
-        process();
-    } catch (ex) {
-        if (typeof DOMException !== 'undefined' && ex instanceof DOMException && ex.code === DOMException.INVALID_ACCESS_ERR) {
-            styleElt.sheet.disabled = true;
-            styleElt.addEventListener('load', function onStyleLoaded() {
-                styleElt.removeEventListener('load', onStyleLoaded);
-                setTimeout(() => {
-                    process();
-                    styleElt.sheet.disabled = false;
-                });
-            });
-            return;
-        }
-        throw ex;
-    }
-}
-
-export function vueTemplateRender(createElement, model, parentView) {
-    return createElement(createComponentObject(model, parentView));
+export function vueTemplateRender(model, parentView) {
+    return Vue.h(createComponentObject(model, parentView));
 }
 
 function createComponentObject(model, parentView) {
     if (model instanceof VueModel) {
         return {
-            render(createElement) {
-                return vueRender(createElement, model, parentView, {});
+            render() {
+                return vueRender(model, parentView, {});
             },
         };
     }
@@ -95,140 +27,60 @@ function createComponentObject(model, parentView) {
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
     const template = templateModel.get('template');
-    const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
-    const vuefile = readVueFile(template, sourceCodeFile);
-
-    const css = model.get('css') || (vuefile.STYLE && vuefile.STYLE.content);
-    const cssId = (vuefile.STYLE && vuefile.STYLE.id);
-    const scopedFromTemplate = (vuefile.STYLE && vuefile.STYLE.scoped);
-    const scoped = model.get('scoped');
-    const scopedCssSupport = model.get('scoped_css_support');
-    // If scoped trait is explicitly set, use it (for css trait with scoped=True/False)
-    // If scoped is not set (None), only honor <style scoped> from template if scoped_css_support is enabled
-    const useScoped = scoped !== null && scoped !== undefined
-        ? scoped
-        : (scopedCssSupport && scopedFromTemplate);
-    const scopeId = useScoped && css ? getScopeId(model, cssId) : null;
-
-    if (css) {
-        if (cssId) {
-            const prefixedCssId = `ipyvue-${cssId}`;
-            let style = document.getElementById(prefixedCssId);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = prefixedCssId;
-                document.head.appendChild(style);
-            }
-            if (scopeId) {
-                if (style.innerHTML !== css || style.getAttribute('data-ipyvue-scope') !== scopeId) {
-                    style.innerHTML = css;
-                    scopeStyleElement(style, scopeId);
-                    style.setAttribute('data-ipyvue-scope', scopeId);
-                }
-            } else {
-                // Reset innerHTML if CSS changed or if transitioning from scoped to unscoped
-                // (need to reset to remove the scoped CSS rule transformations)
-                const wasScoped = style.getAttribute('data-ipyvue-scope');
-                if (style.innerHTML !== css || wasScoped) {
-                    style.innerHTML = css;
-                    if (wasScoped) {
-                        style.removeAttribute('data-ipyvue-scope');
-                    }
-                }
-            }
-        } else {
-            const style = document.createElement('style');
-            style.id = model.cid;
-            style.innerHTML = css;
-            document.head.appendChild(style);
-            if (scopeId) {
-                scopeStyleElement(style, scopeId);
-                style.setAttribute('data-ipyvue-scope', scopeId);
-            }
-            parentView.once('remove', () => {
-                document.head.removeChild(style);
-            });
-        }
-    }
-
-    // eslint-disable-next-line no-new-func
-    const methods = model.get('methods') ? Function(`return ${model.get('methods').replace('\n', ' ')}`)() : {};
-    // eslint-disable-next-line no-new-func
-    const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
     const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
-    function callVueFn(name, this_) {
-        if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
-            vuefile.SCRIPT[name].bind(this_)();
+    return getAsyncComponent(
+        template,
+        {
+            ...createModelMixin(model, templateModel, parentView),
+            components: {
+                ...createInstanceComponents(instanceComponents, parentView),
+                ...createClassComponents(classComponents, model, parentView),
+                ...createFullVueComponents(fullVueComponents),
+            },
+        },
+        {
+            styleOwnerKey: `template-${templateModel.model_id}`,
+            sourceURL: templateModel.get('source_url') || `ipyvue-template-${templateModel.model_id}.vue`,
         }
-    }
+    );
+}
 
-    return {
+export function createModelMixin(model, templateModel, parentView) {
+    return ({
         inject: ['viewCtx'],
-        data() {
-            // data that is only used in the template, and not synced with the backend/model
-            const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
-            return { ...data, ...dataTemplate, ...createDataMapping(model) };
+        data: () => {
+            return createDataMapping(model);
         },
-        beforeCreate() {
-            callVueFn('beforeCreate', this);
-        },
+        watch: createWatches(model, parentView),
         created() {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
             templateModel.on('change:template', this.__onTemplateChange);
+            templateModel.on('change:source_url', this.__onTemplateChange);
             addModelListeners(model, this);
-            callVueFn('created', this);
         },
-        watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
-        methods: {
-            ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
-            ...methods,
-            ...createMethods(model, parentView),
+        beforeUnmount() {
+            if (this.__onTemplateChange) {
+                templateModel.off('change:template', this.__onTemplateChange);
+                templateModel.off('change:source_url', this.__onTemplateChange);
+                this.__onTemplateChange = null;
+            }
         },
-        components: {
-            ...createInstanceComponents(instanceComponents, parentView),
-            ...createClassComponents(classComponents, model, parentView),
-            ...createFullVueComponents(fullVueComponents),
-        },
-        computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
-        template: vuefile.TEMPLATE === undefined && vuefile.SCRIPT === undefined && vuefile.STYLE === undefined
-            ? template
-            : vuefile.TEMPLATE,
-        beforeMount() {
-            applyScopeId(this, scopeId);
-            callVueFn('beforeMount', this);
-        },
-        mounted() {
-            applyScopeId(this, scopeId);
-            callVueFn('mounted', this);
-        },
-        beforeUpdate() {
-            callVueFn('beforeUpdate', this);
-        },
-        updated() {
-            applyScopeId(this, scopeId);
-            callVueFn('updated', this);
-        },
-        beforeDestroy() {
-            templateModel.off('change:template', this.__onTemplateChange);
-            callVueFn('beforeDestroy', this);
-        },
-        destroyed() {
-            callVueFn('destroyed', this);
-        },
-    };
+        methods: createMethods(model, parentView),
+        computed: aliasRefProps(model),
+    });
 }
 
 function createDataMapping(model) {
     return model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
+            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
             result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
@@ -238,7 +90,7 @@ function createDataMapping(model) {
 function addModelListeners(model, vueModel) {
     model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['v_model', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
+            && !['v_model', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
             if (_.isEqual(model.get(prop), vueModel[prop])) {
@@ -262,31 +114,25 @@ function addModelListeners(model, vueModel) {
     });
 }
 
-function createWatches(model, parentView, templateWatchers) {
-    const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
-    && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
-    .reduce((result, prop) => ({
-        ...result,
-        [prop]: {
-            handler(value) {
-                if (templateWatchers && templateWatchers[prop]) {
-                    templateWatchers[prop].bind(this)(value);
-                }
-                /* Don't send changes received from backend back */
-                if (_.isEqual(value, model.get(prop))) {
-                    return;
-                }
+function createWatches(model, parentView) {
+    return model.keys()
+        .filter(prop => !prop.startsWith('_')
+            && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
+        .reduce((result, prop) => ({
+            ...result,
+            [prop]: {
+                handler(value) {
+                    /* Don't send changes received from backend back */
+                    if (_.isEqual(value, model.get(prop))) {
+                        return;
+                    }
 
-                model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                model.save_changes(model.callbacks(parentView));
+                    model.set(prop, value === undefined ? null : _.cloneDeep(value));
+                    model.save_changes(model.callbacks(parentView));
+                },
+                deep: true,
             },
-            deep: true,
-        },
-    }), {})
-    /* Overwritten keys from templateWatchers are handled in modelWatchers
-        so that we eventually call all handlers from templateWatchers. 
-    */
-    return {...templateWatchers, ...modelWatchers};
+        }), {});
 }
 
 function createMethods(model, parentView) {
@@ -347,12 +193,12 @@ function createClassComponents(components, containerModel, parentView) {
                     {
                         create_widget: componentSpec.class, // eslint-disable-line camelcase
                         id: this.id,
-                        props: this.$options.propsData,
+                        props: this.$props,
                     },
                     containerModel.callbacks(parentView),
                 );
             },
-            destroyed() {
+            beforeUnmount() {
                 containerModel.send(
                     {
                         destroy_widget: this.id, // eslint-disable-line camelcase
@@ -378,11 +224,11 @@ function createClassComponents(components, containerModel, parentView) {
                     }
                 },
             }), {}),
-            render(createElement) {
+            render() {
                 if (this.model) {
-                    return vueRender(createElement, this.model, parentView, {});
+                    return vueRender(this.model, parentView, {});
                 }
-                return createElement('div', ['temp-content']);
+                return Vue.h('div', ['temp-content']);
             },
         }),
     }), {});
@@ -391,7 +237,9 @@ function createClassComponents(components, containerModel, parentView) {
 function createFullVueComponents(components) {
     return components.reduce((accumulator, [componentName, vueFile]) => ({
         ...accumulator,
-        [componentName]: httpVueLoader(vueFile),
+        [componentName]: getAsyncComponent(vueFile, {}, {
+            sourceURL: `ipyvue-component-${componentName}.vue`,
+        }),
     }), {});
 }
 
@@ -411,88 +259,37 @@ function aliasRefProps(model) {
         }), {});
 }
 
-function readVueFile(fileContent, sourceURL) {
-    const component = parseComponent(fileContent, { pad: 'line' });
-    const result = {};
-
-    if (component.template) {
-        result.TEMPLATE = component.template.content;
-    }
-    if (component.script) {
-        const { content } = component.script;
-        try {
-            // Try the new approach first: define module and exports, then evaluate the whole script as if it is a commonjs module
-            const module = {
-                exports: {}
+export function jupyterWidgetComponent() {
+    return {
+        props: ['widget'],
+        inject: ['viewCtx'],
+        data() {
+            return {
+                component: null,
             };
-            /*
-               Add sourceURL directive - this helps browser dev tools show better error locations.
-               But only add it if not already present in the content (users can add it themselves if they want).
-            */
-            const hasSourceURL = /\/\/#\s*sourceURL\s*=/i.test(content);
-            const contentWithScriptPath = hasSourceURL
-                ? content
-                : content + `\n//# sourceURL=${sourceURL}`;
-            const scriptFunction = new Function('module', 'exports', contentWithScriptPath);
-            scriptFunction(module, module.exports);
-            result.SCRIPT = module.exports;
-        } catch (error) {
-            // Fallback to the old approach for backwards compatibility
-            console.warn('Failed to evaluate Vue script and find module.exports, falling back to old method, please use module.exports = { ... }');
-            try {
-                const str = content
-                    .substring(content.indexOf('{'), content.length)
-                    .replace('\n', ' ');
-                // eslint-disable-next-line no-new-func
-                result.SCRIPT = Function(`return ${str}`)();
-            } catch (fallbackError) {
-                console.warn('Failed to evaluate Vue script with both new and old methods:', fallbackError);
-                /*  This is a bit like the old behaviour, except we assume the first error is probably correcter
-                    moreoften than not, since the old method can fail due to a { being present before module.exports */
-                throw error;
-            }
-        }
-    }
-    if (component.styles && component.styles.length > 0) {
-        const { content } = component.styles[0];
-        const { attrs = {} } = component.styles[0];
-        const { id } = attrs;
-        const scoped = Object.prototype.hasOwnProperty.call(attrs, 'scoped');
-        result.STYLE = { content, id, scoped };
-    }
-
-    return result;
-}
-
-Vue.component('jupyter-widget', {
-    props: ['widget'],
-    inject: ['viewCtx'],
-    data() {
-        return {
-            component: null,
-        };
-    },
-    created() {
-        this.update();
-    },
-    watch: {
-        widget() {
+        },
+        created() {
             this.update();
         },
-    },
-    methods: {
-        update() {
-            this.viewCtx
-                .getModelById(this.widget.substring(10))
-                .then((mdl) => {
-                    this.component = createComponentObject(mdl, this.viewCtx.getView());
-                });
+        watch: {
+            widget() {
+                this.update();
+            },
         },
-    },
-    render(createElement) {
-        if (!this.component) {
-            return createElement('div');
-        }
-        return createElement(this.component);
-    },
-});
+        methods: {
+            update() {
+                this.viewCtx
+                    .getModelById(this.widget.substring(10))
+                    .then((mdl) => {
+                        this.component = Vue.markRaw(createComponentObject(mdl, this.viewCtx.getView()));
+                    });
+            },
+        },
+        render() {
+            if (!this.component) {
+                return Vue.h('div');
+            }
+            return Vue.h(this.component);
+        },
+    }
+}

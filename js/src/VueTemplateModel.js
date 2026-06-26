@@ -1,5 +1,6 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel, unpack_models } from '@jupyter-widgets/base';
+import { version } from './version';
 
 export class VueTemplateModel extends DOMWidgetModel {
     defaults() {
@@ -11,11 +12,10 @@ export class VueTemplateModel extends DOMWidgetModel {
                 _view_name: 'VueView',
                 _view_module: 'jupyter-vue',
                 _model_module: 'jupyter-vue',
-                _view_module_version: '^0.0.3',
-                _model_module_version: '^0.0.3',
+                _view_module_version: version,
+                _model_module_version: version,
                 template: null,
                 css: null,
-                scoped: null,
                 methods: null,
                 data: null,
                 events: null,

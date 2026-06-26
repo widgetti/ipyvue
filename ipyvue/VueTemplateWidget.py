@@ -1,5 +1,5 @@
 import os
-from traitlets import Any, Bool, Unicode, List, Dict, Union, Instance, default
+from traitlets import Any, Unicode, List, Dict, Union, Instance
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
 
@@ -8,7 +8,6 @@ from ._version import semver
 from .ForceLoad import force_load_instance
 import inspect
 from importlib import import_module
-import ipyvue
 
 OBJECT_REF = "objectRef"
 FUNCTION_REF = "functionRef"
@@ -88,6 +87,18 @@ def as_refs(name, data):
     return to_ref_structure(data, [])
 
 
+class TraitNotAvailable(Any):
+    def __init__(self, on_use_msg):
+        self.on_use_msg = on_use_msg
+        super().__init__()
+
+    def get(self, *ignored):
+        raise AttributeError(self.on_use_msg(self.name))
+
+    def set(self, *ignored):
+        raise AttributeError(AttributeError(self.on_use_msg(self.name)))
+
+
 class VueTemplate(DOMWidget, Events):
 
     class_component_serialization = {
@@ -117,19 +128,20 @@ class VueTemplate(DOMWidget, Events):
         sync=True, **widget_serialization
     )
 
-    css = Unicode(None, allow_none=True).tag(sync=True)
+    css = TraitNotAvailable(
+        lambda name: "The css trait is no longer available in v3, please use the \
+        template <style> tag instead"
+    )
 
-    scoped = Bool(None, allow_none=True).tag(sync=True)
+    methods = TraitNotAvailable(
+        lambda name: "The methods trait is no longer available in v3, please use \
+        { methods: ...} in the template <script> tag instead"
+    )
 
-    scoped_css_support = Bool(allow_none=False).tag(sync=True)
-
-    @default("scoped_css_support")
-    def _default_scoped_css_support(self):
-        return ipyvue.scoped_css_support
-
-    methods = Unicode(None, allow_none=True).tag(sync=True)
-
-    data = Unicode(None, allow_none=True).tag(sync=True)
+    data = TraitNotAvailable(
+        lambda name: "The data trait is no longer available in v3, please use \
+        { data(): ...} in the template <script> tag instead"
+    )
 
     events = List(Unicode(), allow_none=True).tag(sync=True)
 
@@ -144,9 +156,9 @@ class VueTemplate(DOMWidget, Events):
     def __init__(self, *args, **kwargs):
         if self.template_file:
             abs_path = ""
-            if type(self.template_file) == str:
+            if isinstance(self.template_file, str):
                 abs_path = os.path.abspath(self.template_file)
-            elif type(self.template_file) == tuple:
+            elif isinstance(self.template_file, tuple):
                 rel_file, path = self.template_file
                 abs_path = os.path.join(os.path.dirname(rel_file), path)
 
