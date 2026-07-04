@@ -1,6 +1,7 @@
 from ._version import __version__
 from .Html import Html
 from .Template import Template, watch
+from .esm import Module, define_module
 from .VueWidget import VueWidget
 from .VueTemplateWidget import VueTemplate
 from .VueComponentRegistry import (
