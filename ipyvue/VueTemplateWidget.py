@@ -139,6 +139,12 @@ class VueTemplate(DOMWidget, Events):
     def _default_scoped_css_support(self):
         return ipyvue.scoped_css_support
 
+    template_props_support = Bool(allow_none=False).tag(sync=True)
+
+    @default("template_props_support")
+    def _default_template_props_support(self):
+        return ipyvue.template_props_support
+
     methods = Unicode(None, allow_none=True).tag(sync=True)
 
     data = Unicode(None, allow_none=True).tag(sync=True)
