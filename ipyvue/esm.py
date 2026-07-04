@@ -9,7 +9,7 @@ bypassing the in-browser SFC compiler entirely.
 """
 
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from ipywidgets import Widget
 from traitlets import List as ListTrait
@@ -33,7 +33,9 @@ class Module(Widget):
     dependencies = ListTrait(Unicode(), default_value=[]).tag(sync=True)
 
 
-def define_module(name: str, module: Union[str, Path]) -> Module:
+def define_module(
+    name: str, module: Union[str, Path, None] = None, *, code: Optional[str] = None
+) -> Module:
     """Register an ES module under a name.
 
     Parameters
@@ -41,18 +43,24 @@ def define_module(name: str, module: Union[str, Path]) -> Module:
     name:
         Import-map name the module will be available under.
     module:
-        The ES module source, or a Path to it (e.g. a vite/rollup build with
-        ``vue`` marked external).
+        A url the module is served from (str, e.g. a bundle in the app's
+        static dir), or a Path to the module source on disk (e.g. a
+        vite/rollup build with ``vue`` marked external).
+    code:
+        The module source as a string (alternative to ``module``).
     """
+    if (module is None) == (code is None):
+        raise TypeError("pass either module (url or Path) or code")
     dependencies = [n for n in _module_names if n != name]
     if name not in _module_names:
         _module_names.append(name)
-    if isinstance(module, str) and (
-        module.startswith("http") or module.startswith("/")
-    ):
-        return Module(url=module, name=name, dependencies=dependencies)
-    code = module.read_text(encoding="utf8") if isinstance(module, Path) else module
-    return Module(code=code, name=name, dependencies=dependencies)
+    if code is not None:
+        return Module(code=code, name=name, dependencies=dependencies)
+    if isinstance(module, Path):
+        return Module(
+            code=module.read_text(encoding="utf8"), name=name, dependencies=dependencies
+        )
+    return Module(url=module, name=name, dependencies=dependencies)
 
 
 def get_module_names() -> List[str]:

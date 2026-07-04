@@ -20,7 +20,7 @@ def test_esm_module_component(
 
         ipyvue.define_module(
             "esm-test-module",
-            """
+            code="""
             import { h } from "vue";
 
             export const Label = {
@@ -60,7 +60,7 @@ def test_esm_module_component_as_tag(
 
         ipyvue.define_module(
             "esm-click-module",
-            """
+            code="""
             import { h } from "vue";
 
             export const ClickButton = {
@@ -123,7 +123,7 @@ def test_esm_module_plugin_registers_components(
         # plain vue plugin, applied to every app
         ipyvue.define_module(
             "esm-plugin-module",
-            """
+            code="""
             import { h } from "vue";
 
             const Hello = {
