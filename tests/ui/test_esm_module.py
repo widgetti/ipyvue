@@ -107,3 +107,52 @@ def test_esm_module_component_as_tag(
     page_session.locator(".esm-counter >> text=1 clicks").wait_for()
     counter.click()
     page_session.locator(".esm-counter >> text=2 clicks").wait_for()
+
+
+@pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
+def test_esm_module_plugin_registers_components(
+    ipywidgets_runner,
+    page_session: playwright.sync_api.Page,
+):
+    def kernel_code():
+        import traitlets
+        import ipyvue
+        from IPython.display import display
+
+        # the module registers its own components: the default export is a
+        # plain vue plugin, applied to every app
+        ipyvue.define_module(
+            "esm-plugin-module",
+            """
+            import { h } from "vue";
+
+            const Hello = {
+                props: { name: { type: String, required: true } },
+                render() {
+                    const text = `hello ${this.name}`;
+                    return h("div", { class: "esm-plugin-hello" }, text);
+                },
+            };
+
+            export default {
+                install(app) {
+                    app.component("esm-hello", Hello);
+                },
+            };
+            """,
+        )
+
+        class Widget(ipyvue.VueTemplate):
+            template = traitlets.Unicode(
+                """
+                <template>
+                    <esm-hello :name="name"></esm-hello>
+                </template>
+                """
+            ).tag(sync=True)
+            name = traitlets.Unicode("from python").tag(sync=True)
+
+        display(Widget())
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator(".esm-plugin-hello >> text=hello from python").wait_for()

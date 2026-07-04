@@ -5,6 +5,7 @@ import {
     provideModule,
     requestModule,
 } from './esmVueTemplate';
+import { installModulePlugin } from './VueComponentModel';
 
 /* Ships a precompiled ES module (see ipyvue.esm.define_module). The code is
  * imported via es-module-shims and provided to the named-module registry,
@@ -37,6 +38,9 @@ export class ModuleModel extends WidgetModel {
             const dependencies = this.get('dependencies') || [];
             await Promise.all(dependencies.map(dep => requestModule(dep)));
             const module = await loadModuleFromCode(this.get('code'), name);
+            if (module.default && typeof module.default.install === 'function') {
+                installModulePlugin(module.default);
+            }
             provideModule(name, module);
         } catch (e) {
             console.error(`ipyvue: failed to load ES module "${name}"`, e);
