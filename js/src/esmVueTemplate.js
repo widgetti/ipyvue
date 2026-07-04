@@ -201,6 +201,18 @@ export function invalidateModule(name) {
     delete _moduleResolvers[name];
 }
 
+export async function loadModuleFromUrl(url, name) {
+    await init();
+    addVueImportMap();
+    const module = await importShim(url);
+    try {
+        importShim.addImportMap({ imports: { [name]: url } });
+    } catch (e) {
+        console.warn(`ipyvue: could not (re)map import "${name}"`, e);
+    }
+    return module;
+}
+
 export async function loadModuleFromCode(code, name) {
     await init();
     /* another library (e.g. ipyreact) may have replaced the importShim

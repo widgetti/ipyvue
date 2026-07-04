@@ -27,6 +27,9 @@ class Module(Widget):
 
     name = Unicode().tag(sync=True)
     code = Unicode().tag(sync=True)
+    # when set, the module is imported from this url instead of shipping the
+    # code over the widget model (e.g. a bundle served from a static dir)
+    url = Unicode(None, allow_none=True).tag(sync=True)
     dependencies = ListTrait(Unicode(), default_value=[]).tag(sync=True)
 
 
@@ -41,10 +44,14 @@ def define_module(name: str, module: Union[str, Path]) -> Module:
         The ES module source, or a Path to it (e.g. a vite/rollup build with
         ``vue`` marked external).
     """
-    code = module.read_text(encoding="utf8") if isinstance(module, Path) else module
     dependencies = [n for n in _module_names if n != name]
     if name not in _module_names:
         _module_names.append(name)
+    if isinstance(module, str) and (
+        module.startswith("http") or module.startswith("/")
+    ):
+        return Module(url=module, name=name, dependencies=dependencies)
+    code = module.read_text(encoding="utf8") if isinstance(module, Path) else module
     return Module(code=code, name=name, dependencies=dependencies)
 
 

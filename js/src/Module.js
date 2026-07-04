@@ -2,6 +2,7 @@ import { WidgetModel } from '@jupyter-widgets/base';
 import {
     invalidateModule,
     loadModuleFromCode,
+    loadModuleFromUrl,
     provideModule,
     requestModule,
 } from './esmVueTemplate';
@@ -18,6 +19,7 @@ export class ModuleModel extends WidgetModel {
                 _model_name: 'ModuleModel',
                 name: '',
                 code: '',
+                url: null,
                 dependencies: [],
             },
         };
@@ -26,7 +28,7 @@ export class ModuleModel extends WidgetModel {
     initialize(attributes, options) {
         super.initialize(attributes, options);
         this.load();
-        this.on('change:code', () => {
+        this.on('change:code change:url', () => {
             invalidateModule(this.get('name'));
             this.load();
         });
@@ -37,7 +39,10 @@ export class ModuleModel extends WidgetModel {
         try {
             const dependencies = this.get('dependencies') || [];
             await Promise.all(dependencies.map(dep => requestModule(dep)));
-            const module = await loadModuleFromCode(this.get('code'), name);
+            const url = this.get('url');
+            const module = url
+                ? await loadModuleFromUrl(url, name)
+                : await loadModuleFromCode(this.get('code'), name);
             if (module.default && typeof module.default.install === 'function') {
                 installModulePlugin(module.default);
             }
