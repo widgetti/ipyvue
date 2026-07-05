@@ -172,6 +172,105 @@ export async function addModule(name, module) {
     })
 }
 
+/* Named-module registry (mirrors ipyreact): ModuleModel widgets provide
+ * modules by name; consumers await them, so load order does not matter. */
+const _providedModules = {};
+const _moduleResolvers = {};
+
+export function provideModule(name, module) {
+    if (_moduleResolvers[name]) {
+        _moduleResolvers[name].resolve(module);
+        delete _moduleResolvers[name];
+    } else {
+        _providedModules[name] = Promise.resolve(module);
+    }
+}
+
+export function requestModule(name) {
+    if (!_providedModules[name]) {
+        _providedModules[name] = new Promise((resolve, reject) => {
+            _moduleResolvers[name] = { resolve, reject };
+        });
+    }
+    return _providedModules[name];
+}
+
+export function invalidateModule(name) {
+    /* next requestModule waits for a fresh provideModule (hot reload) */
+    delete _providedModules[name];
+    delete _moduleResolvers[name];
+}
+
+export async function loadModuleFromUrl(url, name) {
+    await init();
+    addVueImportMap();
+    const module = await importShim(url);
+    try {
+        importShim.addImportMap({ imports: { [name]: url } });
+    } catch (e) {
+        console.warn(`ipyvue: could not (re)map import "${name}"`, e);
+    }
+    return module;
+}
+
+export async function loadModuleFromCode(code, name) {
+    await init();
+    /* another library (e.g. ipyreact) may have replaced the importShim
+     * global since init; re-add the vue mapping so this import resolves
+     * against the shim that will actually run it (same refresh toModule
+     * does for compiled SFCs) */
+    addVueImportMap();
+    const url = toModuleUrl(withSourceURL(code, `ipyvue-module:///${name}.mjs`));
+    const module = await importShim(url);
+    /* Also expose under the name for inter-module imports. Import maps
+     * cannot remap an already-resolved specifier (hot reload in the same
+     * page); the named-module registry is the source of truth, so a failed
+     * remap only means inter-module imports keep the previous version. */
+    try {
+        importShim.addImportMap({ imports: { [name]: url } });
+    } catch (e) {
+        console.warn(`ipyvue: could not (re)map import "${name}" (stale inter-module imports until page reload)`, e);
+    }
+    return module;
+}
+
+async function resolveModuleExport(moduleName, exportName) {
+    const module = await requestModule(moduleName);
+    if (module instanceof Error) {
+        /* ModuleModel provides its load error so consumers fail visibly */
+        throw module;
+    }
+    const component = module[exportName || 'default'];
+    if (!component) {
+        throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
+    }
+    return component;
+}
+
+/* Component whose implementation comes from a precompiled ES module instead
+ * of an in-browser compiled SFC. Mirrors compileSfc's output shape: the
+ * component's own options ride as mixins[0] so the ipyvue model mixin
+ * (mixins[1], providing the Python traits as data and the event methods)
+ * takes precedence over the component's own data() placeholders. */
+export function getEsmAsyncComponent(moduleName, exportName, mixin) {
+    return Vue.defineAsyncComponent(async () => {
+        const component = await resolveModuleExport(moduleName, exportName);
+        const { render, setup, __scopeId, ...rest } = component;
+        return {
+            ...(render && { render }),
+            ...(setup && { setup }),
+            ...(__scopeId && { __scopeId }),
+            mixins: [rest, mixin],
+        };
+    });
+}
+
+/* An ES module export used directly as a component (a tag inside another
+ * template): no model mixin, the component keeps its own props/emits. */
+export function getEsmComponent(moduleName, exportName) {
+    return Vue.defineAsyncComponent(() => resolveModuleExport(moduleName, exportName));
+}
+
 let _init_promise = null;
 let _vue_module_url = null;
 function vueModuleUrl() {
@@ -203,7 +302,14 @@ async function init() {
 init();
 
 async function loadShim() {
+    if (window.importShim) {
+        return;
+    }
     if (document.querySelectorAll("script[src*=es-module-shims][type=module]").length || document.getElementById("es-module-shims")) {
+        /* another library is loading it; wait for its copy */
+        while (!window.importShim) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
         return;
     }
     return loadScript("module", toModuleUrl(esModuleShims), "es-module-shims")
@@ -222,10 +328,12 @@ function expose(module) {
     const id = "_ipyvue2_" + (Math.random()).toString(36);
     window[id] = module;
     const names = Object.keys(module).join(", ")
+    /* no delete of the global: the blob can be evaluated more than once
+     * (import-map updates, or a second es-module-shims instance loaded by
+     * another library), and each evaluation reads it */
     return toModuleUrl(`
         const { ${names} } = window["${id}"];
         export default window["${id}"].default;
-        delete window["${id}"];
         export { ${names} };`)
 }
 

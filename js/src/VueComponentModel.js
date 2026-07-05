@@ -8,6 +8,7 @@ import { version } from './version';
 const apps = new Set();
 const appsWithBaseComponents = new WeakSet();
 const registeredComponentsByApp = new WeakMap();
+const modulePlugins = new Set();
 
 export function addApp(app, widget_manager) {
     apps.add(app);
@@ -16,8 +17,17 @@ export function addApp(app, widget_manager) {
         app.component('jupyter-widget', jupyterWidgetComponent());
         appsWithBaseComponents.add(app);
     }
+    modulePlugins.forEach(plugin => app.use(plugin));
 
     return syncComponentModels(app, widget_manager);
+}
+
+/* An ES module (see esm.py) whose default export is a vue plugin registers
+ * its own components: we app.use it on every app, current and future.
+ * app.use ignores repeated installs of the same plugin. */
+export function installModulePlugin(plugin) {
+    modulePlugins.add(plugin);
+    apps.forEach(app => app.use(plugin));
 }
 
 async function syncComponentModels(app, widget_manager) {

@@ -154,6 +154,8 @@ jobs:
           pip install "solara-server[starlette,dev] @ ${PKG_URL}/solara-server/solara_server-1.57.3-py3-none-any.whl"
           pip install "pytest-ipywidgets[all] @ ${PKG_URL}/pytest-ipywidgets/pytest_ipywidgets-1.57.3-py3-none-any.whl"
           pip install "jupyter_server<2"
+          # ipyvuetify's pin drags in a released ipyvue; put the branch wheel back
+          pip install --force-reinstall --no-deps ${wheel}
 
       - name: Install playwright browsers
         run: playwright install chromium
