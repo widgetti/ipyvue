@@ -302,7 +302,14 @@ async function init() {
 init();
 
 async function loadShim() {
+    if (window.importShim) {
+        return;
+    }
     if (document.querySelectorAll("script[src*=es-module-shims][type=module]").length || document.getElementById("es-module-shims")) {
+        /* another library is loading it; wait for its copy */
+        while (!window.importShim) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
         return;
     }
     return loadScript("module", toModuleUrl(esModuleShims), "es-module-shims")
