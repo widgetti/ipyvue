@@ -142,6 +142,38 @@ def test_esm_template_in_vuetify_widget(
     page_session.locator(".esm-vuetify-hello >> text=hello from python").wait_for()
 
 
+def test_esm_module_provided_after_request(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    # the widget can arrive (and render) before its module does: the
+    # pending request must resolve when the module is provided later
+    class Widget(vue.VueTemplate):
+        label = traitlets.Unicode("late").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-late-module", esm_export="Hello")
+
+    display(Widget())
+    # make sure the widget rendered (as an empty placeholder) before the
+    # module exists
+    page_session.locator("text=module defined").wait_for(state="detached")
+    page_session.wait_for_timeout(300)
+
+    vue.define_module(
+        "esm-late-module",
+        code="""
+        export const Hello = {
+            data() {
+                return { label: "placeholder" };
+            },
+            template: `<div class="esm-late">module defined {{ label }}</div>`,
+        };
+        """,
+    )
+    page_session.locator(".esm-late >> text=module defined late").wait_for()
+
+
 def test_esm_module_as_template_implementation(
     solara_test, page_session: playwright.sync_api.Page
 ):
