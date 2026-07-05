@@ -7,6 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
+import { getEsmComponent } from './esmModule';
 import { TemplateModel } from './Template';
 
 function normalizeScopeId(value) {
@@ -158,7 +159,8 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
     function callVueFn(name, this_) {
@@ -195,6 +197,7 @@ function createComponentObject(model, parentView) {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
             ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE === undefined && vuefile.SCRIPT === undefined && vuefile.STYLE === undefined
@@ -385,6 +388,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return createElement('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createEsmComponents(components) {
+    return components.reduce((accumulator, [componentName, spec]) => ({
+        ...accumulator,
+        [componentName]: getEsmComponent(spec.esm_module, spec.esm_export),
     }), {});
 }
 
