@@ -31,14 +31,23 @@ export function forceUpdateRoots() {
  * modules by name; consumers await them, so load order does not matter. */
 const providedModules = {};
 const moduleResolvers = {};
+const loadedModules = {};
 
 export function provideModule(name, module) {
+    loadedModules[name] = module;
     if (moduleResolvers[name]) {
         moduleResolvers[name].resolve(module);
         delete moduleResolvers[name];
     } else {
         providedModules[name] = Promise.resolve(module);
     }
+}
+
+/* The module when already loaded, undefined otherwise: consumers that can
+ * render synchronously should, an async component factory is only a
+ * fallback (vue2 cannot re-render it under a cached vnode). */
+export function getLoadedModule(name) {
+    return loadedModules[name];
 }
 
 export function requestModule(name) {
@@ -54,6 +63,7 @@ export function invalidateModule(name) {
     /* next requestModule waits for a fresh provideModule (hot reload) */
     delete providedModules[name];
     delete moduleResolvers[name];
+    delete loadedModules[name];
 }
 
 function toModuleUrl(code) {
