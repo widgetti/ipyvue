@@ -262,6 +262,18 @@ function addModelListeners(model, vueModel) {
     });
 }
 
+/* vue allows function, {handler, ...}, method-name string and array watchers */
+function callTemplateWatcher(vm, watcher, value, oldValue) {
+    [].concat(watcher).forEach((entry) => {
+        const handler = typeof entry === 'object' ? entry.handler : entry;
+        (typeof handler === 'string' ? vm[handler] : handler).call(vm, value, oldValue);
+    });
+}
+
+function watchesImmediately(watcher) {
+    return [].concat(watcher || []).some(entry => entry && entry.immediate);
+}
+
 function createWatches(model, parentView, templateWatchers) {
     const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
     && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
@@ -270,7 +282,7 @@ function createWatches(model, parentView, templateWatchers) {
         [prop]: {
             handler(value, oldValue) {
                 if (templateWatchers && templateWatchers[prop]) {
-                    templateWatchers[prop].bind(this)(value, oldValue);
+                    callTemplateWatcher(this, templateWatchers[prop], value, oldValue);
                 }
                 /* Don't send changes received from backend back */
                 if (_.isEqual(value, model.get(prop))) {
@@ -281,6 +293,7 @@ function createWatches(model, parentView, templateWatchers) {
                 model.save_changes(model.callbacks(parentView));
             },
             deep: true,
+            immediate: watchesImmediately(templateWatchers && templateWatchers[prop]),
         },
     }), {})
     /* Overwritten keys from templateWatchers are handled in modelWatchers

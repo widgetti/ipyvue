@@ -125,3 +125,40 @@ def test_watcher_old_value(solara_test, page_session: Page):
     element = page_session.locator("text=old: 0")
     element.click()
     page_session.locator("text=old: 0 new: 1").wait_for()
+
+
+class WatcherObjectFormTemplate(vue.VueTemplate):
+    number = Int(0).tag(sync=True)
+    text = Unicode("start").tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div>{{text}}</div>
+        </template>
+        <script>
+        export default {
+            watch: {
+                number: {
+                    handler: function(value, oldValue) {
+                        this.text = "object saw " + oldValue + " -> " + value;
+                    },
+                    deep: true,
+                }
+            }
+        }
+        </script>
+        """
+
+
+# Object-form watchers ({handler, deep}) are valid vue and must not crash
+# when a synced trait changes from python
+def test_watcher_object_form(solara_test, page_session: Page):
+    widget = WatcherObjectFormTemplate()
+
+    display(widget)
+
+    page_session.locator("text=start").wait_for()
+    widget.number = 3
+    page_session.locator("text=object saw 0 -> 3").wait_for()
