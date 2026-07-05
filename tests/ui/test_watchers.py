@@ -92,3 +92,36 @@ def test_watcher_vue(solara_test, page_session: Page):
     widget = page_session.locator("text=Click Me 0")
     widget.click()
     widget = page_session.locator("text=Clicked 1")
+
+
+class WatcherOldValueTemplate(vue.VueTemplate):
+    number = Int(0).tag(sync=True)
+    text = Unicode("old: ").tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div @click="number += 1">{{text + number}}</div>
+        </template>
+        <script>
+        export default {
+            watch: {
+                number: function(value, oldValue) {
+                    this.text = "old: " + oldValue + " new: ";
+                }
+            }
+        }
+        </script>
+        """
+
+
+# Watchers follow the vue API: they also receive the previous value
+def test_watcher_old_value(solara_test, page_session: Page):
+    widget = WatcherOldValueTemplate()
+
+    display(widget)
+
+    element = page_session.locator("text=old: 0")
+    element.click()
+    page_session.locator("text=old: 0 new: 1").wait_for()
