@@ -7,7 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
-import { getEsmComponent, requestModule } from './esmModule';
+import { getEsmComponent, getLoadedModule, requestModule } from './esmModule';
 import { TemplateModel } from './Template';
 
 function normalizeScopeId(value) {
@@ -265,41 +265,51 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
 
     const moduleName = templateModel.get('esm_module');
     const exportName = templateModel.get('esm_export');
+    const componentFromModule = (module) => {
+        if (module instanceof Error) {
+            throw module;
+        }
+        let component = module[exportName || 'default'];
+        if (!component) {
+            throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
+        }
+        if (component.props) {
+            /* template-form components get their state as data (for the
+             * two-way model sync); vue2 lets a props declaration (e.g.
+             * written for type checkers) shadow that data, so ignore it
+             * like the compiled-template path does */
+            const { props, ...withoutProps } = component;
+            component = withoutProps;
+        }
+        return { mixins: [component, modelMixin] };
+    };
     /* memoize per widget, keyed on the module registry promise: a fresh
      * component every render would never settle. A module reload provides a
      * new promise, so hot reload gets a fresh component. */
     const modulePromise = requestModule(moduleName);
     if (model.__esmComponentFor !== modulePromise) {
-        const factory = () => modulePromise.then((module) => {
-            if (module instanceof Error) {
-                throw module;
-            }
-            let component = module[exportName || 'default'];
-            if (!component) {
-                throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
-            }
-            if (component.props) {
-                /* template-form components get their state as data (for the
-                 * two-way model sync); vue2 lets a props declaration (e.g.
-                 * written for type checkers) shadow that data, so ignore it
-                 * like the compiled-template path does */
-                const { props, ...withoutProps } = component;
-                component = withoutProps;
-            }
-            return { mixins: [component, modelMixin] };
-        });
         // eslint-disable-next-line no-param-reassign
         model.__esmComponentFor = modulePromise;
-        /* wrap the async factory in a component of our own: resolving only
-         * re-renders the factory's owner, and embedders can cache the
-         * surrounding vnodes (rendering the factory ownerless), so the owner
-         * must be an instance whose render we control */
-        // eslint-disable-next-line no-param-reassign
-        model.__esmComponent = {
-            render(h) {
-                return h(factory);
-            },
-        };
+        const module = getLoadedModule(moduleName);
+        if (module) {
+            /* the module is already loaded: build the component
+             * synchronously, so the widget renders in one pass and keeps
+             * el.__vue__ pointing at the component itself */
+            // eslint-disable-next-line no-param-reassign
+            model.__esmComponent = componentFromModule(module);
+        } else {
+            const factory = () => modulePromise.then(componentFromModule);
+            /* wrap the async factory in a component of our own: resolving
+             * only re-renders the factory's owner, and embedders can cache
+             * the surrounding vnodes (rendering the factory ownerless), so
+             * the owner must be an instance whose render we control */
+            // eslint-disable-next-line no-param-reassign
+            model.__esmComponent = {
+                render(h) {
+                    return h(factory);
+                },
+            };
+        }
     }
     return model.__esmComponent;
 }
