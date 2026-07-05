@@ -10,6 +10,8 @@ class TemplateModel extends WidgetModel {
             ...super.defaults(),
             ...{
                 _model_name: 'TemplateModel',
+                esm_module: null,
+                esm_export: null,
             },
         };
     }

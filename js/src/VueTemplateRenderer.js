@@ -7,7 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
-import { getEsmComponent } from './esmModule';
+import { getEsmComponent, requestModule } from './esmModule';
 import { TemplateModel } from './Template';
 
 function normalizeScopeId(value) {
@@ -95,6 +95,9 @@ function createComponentObject(model, parentView) {
 
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
+    if (isTemplateModel && templateModel.get('esm_module')) {
+        return createEsmTemplateComponent(model, templateModel, parentView);
+    }
     const template = templateModel.get('template');
     const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
     const vuefile = readVueFile(template, sourceCodeFile);
@@ -226,6 +229,63 @@ function createComponentObject(model, parentView) {
             callVueFn('destroyed', this);
         },
     };
+}
+
+/* Precompiled ES module export as the component implementation (see
+ * ipyvue.esm.define_module and Template.esm_module). The export's options
+ * ride as mixins[0] under the model mixin: vue merges mixins in order, so
+ * model traits override the script's data() placeholders and injected event
+ * handlers override method stubs - the same precedence as the in-browser
+ * compiled path. */
+function createEsmTemplateComponent(model, templateModel, parentView) {
+    const componentEntries = Object.entries(model.get('components') || {});
+    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
+    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
+
+    const modelMixin = {
+        inject: ['viewCtx'],
+        data() {
+            return createDataMapping(model);
+        },
+        created() {
+            addModelListeners(model, this);
+        },
+        watch: createWatches(model, parentView, null),
+        methods: createMethods(model, parentView),
+        components: {
+            ...createInstanceComponents(instanceComponents, parentView),
+            ...createClassComponents(classComponents, model, parentView),
+            ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
+        },
+        computed: aliasRefProps(model),
+    };
+
+    const moduleName = templateModel.get('esm_module');
+    const exportName = templateModel.get('esm_export');
+    /* memoize the factory per widget, keyed on the module registry promise:
+     * the root view re-renders on resolve, and a fresh factory every render
+     * would never settle. A module reload provides a new promise, so hot
+     * reload gets a fresh factory. */
+    const modulePromise = requestModule(moduleName);
+    if (model.__esmComponentFor !== modulePromise) {
+        // eslint-disable-next-line no-param-reassign
+        model.__esmComponentFor = modulePromise;
+        // eslint-disable-next-line no-param-reassign
+        model.__esmComponent = () => modulePromise.then((module) => {
+            if (module instanceof Error) {
+                throw module;
+            }
+            const component = module[exportName || 'default'];
+            if (!component) {
+                throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
+            }
+            return { mixins: [component, modelMixin] };
+        });
+    }
+    return model.__esmComponent;
 }
 
 function createDataMapping(model) {
