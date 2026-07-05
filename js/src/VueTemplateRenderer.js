@@ -268,9 +268,9 @@ function createWatches(model, parentView, templateWatchers) {
     .reduce((result, prop) => ({
         ...result,
         [prop]: {
-            handler(value) {
+            handler(value, oldValue) {
                 if (templateWatchers && templateWatchers[prop]) {
-                    templateWatchers[prop].bind(this)(value);
+                    templateWatchers[prop].bind(this)(value, oldValue);
                 }
                 /* Don't send changes received from backend back */
                 if (_.isEqual(value, model.get(prop))) {
