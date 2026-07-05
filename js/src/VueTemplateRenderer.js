@@ -265,16 +265,12 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
 
     const moduleName = templateModel.get('esm_module');
     const exportName = templateModel.get('esm_export');
-    /* memoize the factory per widget, keyed on the module registry promise:
-     * the root view re-renders on resolve, and a fresh factory every render
-     * would never settle. A module reload provides a new promise, so hot
-     * reload gets a fresh factory. */
+    /* memoize per widget, keyed on the module registry promise: a fresh
+     * component every render would never settle. A module reload provides a
+     * new promise, so hot reload gets a fresh component. */
     const modulePromise = requestModule(moduleName);
     if (model.__esmComponentFor !== modulePromise) {
-        // eslint-disable-next-line no-param-reassign
-        model.__esmComponentFor = modulePromise;
-        // eslint-disable-next-line no-param-reassign
-        model.__esmComponent = () => modulePromise.then((module) => {
+        const factory = () => modulePromise.then((module) => {
             if (module instanceof Error) {
                 throw module;
             }
@@ -284,6 +280,18 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
             }
             return { mixins: [component, modelMixin] };
         });
+        // eslint-disable-next-line no-param-reassign
+        model.__esmComponentFor = modulePromise;
+        /* wrap the async factory in a component of our own: resolving only
+         * re-renders the factory's owner, and embedders can cache the
+         * surrounding vnodes (rendering the factory ownerless), so the owner
+         * must be an instance whose render we control */
+        // eslint-disable-next-line no-param-reassign
+        model.__esmComponent = {
+            render(h) {
+                return h(factory);
+            },
+        };
     }
     return model.__esmComponent;
 }
