@@ -125,7 +125,9 @@ def test_esm_template_in_vuetify_widget(
         "esm-vuetify-module",
         code="""
         export const Hello = {
-            data() { return { label: "placeholder" }; },
+            // props declarations (e.g. written for type checkers) must not
+            // shadow the model data
+            props: { label: { type: String, default: "" } },
             template: `<div class="esm-vuetify-hello">hello {{ label }}</div>`,
         };
         """,

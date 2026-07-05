@@ -274,9 +274,17 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
             if (module instanceof Error) {
                 throw module;
             }
-            const component = module[exportName || 'default'];
+            let component = module[exportName || 'default'];
             if (!component) {
                 throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
+            }
+            if (component.props) {
+                /* template-form components get their state as data (for the
+                 * two-way model sync); vue2 lets a props declaration (e.g.
+                 * written for type checkers) shadow that data, so ignore it
+                 * like the compiled-template path does */
+                const { props, ...withoutProps } = component;
+                component = withoutProps;
             }
             return { mixins: [component, modelMixin] };
         });
