@@ -111,3 +111,69 @@ def test_esm_module_component_as_tag(
     page_session.locator(".esm-counter >> text=1 clicks").wait_for()
     counter.click()
     page_session.locator(".esm-counter >> text=2 clicks").wait_for()
+
+
+def test_esm_module_as_template_implementation(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    # an export used as a VueTemplate implementation: the model mixin merges
+    # under it, so traits override the script's data() placeholders (down),
+    # assignment in the template syncs back (up), and injected event
+    # handlers override method stubs
+    vue.define_module(
+        "esm-template-module",
+        code="""
+        export const Counter = {
+            data() {
+                return { count: 0, label: "placeholder" };
+            },
+            methods: {
+                save() {
+                    throw new Error("save is injected by python (vue_save)");
+                },
+            },
+            template: `
+                <div>
+                    <button class="esm-tpl-bump" @click="count = count + 1">
+                        {{ label }} {{ count }}
+                    </button>
+                    <button class="esm-tpl-save" @click="save(count)">save</button>
+                </div>
+            `,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        count = traitlets.Int(10).tag(sync=True)
+        label = traitlets.Unicode("from python").tag(sync=True)
+        saved = traitlets.Int(-1)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-template-module", esm_export="Counter")
+
+        def vue_save(self, value):
+            self.saved = value
+
+    widget = Widget()
+    display(widget)
+
+    # traits win over the script's data() placeholders
+    bump = page_session.locator(".esm-tpl-bump")
+    bump.wait_for()
+    page_session.locator("text=from python 10").wait_for()
+
+    # write-back: template assignment syncs to python
+    bump.click()
+    page_session.locator("text=from python 11").wait_for()
+    assert widget.count == 11
+
+    # injected event handler overrides the throwing stub
+    page_session.locator(".esm-tpl-save").click()
+    page_session.wait_for_timeout(300)
+    assert widget.saved == 11
+
+    # python -> template still flows down
+    widget.count = 42
+    page_session.locator("text=from python 42").wait_for()
