@@ -113,6 +113,35 @@ def test_esm_module_component_as_tag(
     page_session.locator(".esm-counter >> text=2 clicks").wait_for()
 
 
+def test_esm_template_in_vuetify_widget(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    # embedders (ipyvuetify views, solara's widget mount point) render
+    # through cached vnodes; the esm component must still appear once its
+    # module loads
+    v = pytest.importorskip("ipyvuetify")
+
+    vue.define_module(
+        "esm-vuetify-module",
+        code="""
+        export const Hello = {
+            data() { return { label: "placeholder" }; },
+            template: `<div class="esm-vuetify-hello">hello {{ label }}</div>`,
+        };
+        """,
+    )
+
+    class Widget(v.VuetifyTemplate):
+        label = traitlets.Unicode("from python").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-vuetify-module", esm_export="Hello")
+
+    display(Widget())
+    page_session.locator(".esm-vuetify-hello >> text=hello from python").wait_for()
+
+
 def test_esm_module_as_template_implementation(
     solara_test, page_session: playwright.sync_api.Page
 ):
