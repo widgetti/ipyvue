@@ -1,10 +1,21 @@
 import os
 from traitlets import Unicode
 from ipywidgets import DOMWidget
+from ipywidgets.widgets.widget import widget_serialization
+from ipywidgets.widgets.widget_layout import Layout
+from ipywidgets.widgets.trait_types import InstanceDict
 from ._version import semver
 
 
 class VueComponent(DOMWidget):
+    # model-only widget (a registry entry): an explicit layout costs a full
+    # Layout widget (comm_open + close) per registered component, per kernel.
+    # we can drop this when https://github.com/jupyter-widgets/ipywidgets/pull/3592
+    # is merged
+    layout = InstanceDict(Layout, allow_none=True).tag(
+        sync=True, **widget_serialization
+    )
+
     _model_name = Unicode("VueComponentModel").tag(sync=True)
     _model_module = Unicode("jupyter-vue").tag(sync=True)
     _model_module_version = Unicode(semver).tag(sync=True)

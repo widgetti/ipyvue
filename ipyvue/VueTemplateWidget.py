@@ -2,6 +2,8 @@ import os
 from traitlets import Any, Bool, Unicode, List, Dict, Union, Instance, default
 from ipywidgets import DOMWidget
 from ipywidgets.widgets.widget import widget_serialization
+from ipywidgets.widgets.widget_layout import Layout
+from ipywidgets.widgets.trait_types import InstanceDict
 
 from .Template import Template, get_template
 from ._version import semver
@@ -92,6 +94,13 @@ def as_refs(name, data):
 
 
 class VueTemplate(DOMWidget, Events):
+    # like VueWidget: an explicit layout costs a full Layout widget (comm_open
+    # + close) per template widget; None means "no layout" on the vue side.
+    # we can drop this when https://github.com/jupyter-widgets/ipywidgets/pull/3592
+    # is merged
+    layout = InstanceDict(Layout, allow_none=True).tag(
+        sync=True, **widget_serialization
+    )
 
     class_component_serialization = {
         "from_json": widget_serialization["to_json"],
