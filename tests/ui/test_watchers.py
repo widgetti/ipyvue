@@ -162,3 +162,39 @@ def test_watcher_object_form(solara_test, page_session: Page):
     page_session.locator("text=start").wait_for()
     widget.number = 3
     page_session.locator("text=object saw 0 -> 3").wait_for()
+
+
+class WatcherObjectSyntaxTemplate(vue.VueTemplate):
+    number = Int(0).tag(sync=True)
+    text = Unicode("start").tag(sync=True)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div @click="number += 1">{{text}}</div>
+        </template>
+        <script>
+        export default {
+            watch: {
+                number: {
+                    immediate: true,
+                    handler: function(value, oldValue) {
+                        this.text = "n=" + value + " old=" + oldValue;
+                    }
+                }
+            }
+        }
+        </script>
+        """
+
+
+# Object-syntax watchers ({handler, immediate}) on synced props follow the vue API
+def test_watcher_object_syntax(solara_test, page_session: Page):
+    widget = WatcherObjectSyntaxTemplate()
+
+    display(widget)
+
+    element = page_session.locator("text=n=0 old=undefined")
+    element.click()
+    page_session.locator("text=n=1 old=0").wait_for()
