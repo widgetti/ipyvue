@@ -7,6 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
+import { getEsmComponent, getLoadedModule, requestModule } from './esmModule';
 import { TemplateModel } from './Template';
 
 function normalizeScopeId(value) {
@@ -94,6 +95,9 @@ function createComponentObject(model, parentView) {
 
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
+    if (isTemplateModel && templateModel.get('esm_module')) {
+        return createEsmTemplateComponent(model, templateModel, parentView);
+    }
     const template = templateModel.get('template');
     const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
     const vuefile = readVueFile(template, sourceCodeFile);
@@ -158,7 +162,8 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
     function callVueFn(name, this_) {
@@ -195,6 +200,7 @@ function createComponentObject(model, parentView) {
             ...createInstanceComponents(instanceComponents, parentView),
             ...createClassComponents(classComponents, model, parentView),
             ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
         },
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE === undefined && vuefile.SCRIPT === undefined && vuefile.STYLE === undefined
@@ -223,6 +229,89 @@ function createComponentObject(model, parentView) {
             callVueFn('destroyed', this);
         },
     };
+}
+
+/* Precompiled ES module export as the component implementation (see
+ * ipyvue.esm.define_module and Template.esm_module). The export's options
+ * ride as mixins[0] under the model mixin: vue merges mixins in order, so
+ * model traits override the script's data() placeholders and injected event
+ * handlers override method stubs - the same precedence as the in-browser
+ * compiled path. */
+function createEsmTemplateComponent(model, templateModel, parentView) {
+    const componentEntries = Object.entries(model.get('components') || {});
+    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
+    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
+
+    const modelMixin = {
+        inject: ['viewCtx'],
+        data() {
+            return createDataMapping(model);
+        },
+        created() {
+            addModelListeners(model, this);
+        },
+        watch: createWatches(model, parentView, null),
+        methods: createMethods(model, parentView),
+        components: {
+            ...createInstanceComponents(instanceComponents, parentView),
+            ...createClassComponents(classComponents, model, parentView),
+            ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
+        },
+        computed: aliasRefProps(model),
+    };
+
+    const moduleName = templateModel.get('esm_module');
+    const exportName = templateModel.get('esm_export');
+    const componentFromModule = (module) => {
+        if (module instanceof Error) {
+            throw module;
+        }
+        let component = module[exportName || 'default'];
+        if (!component) {
+            throw new Error(`Module "${moduleName}" has no export "${exportName || 'default'}"`);
+        }
+        if (component.props) {
+            /* template-form components get their state as data (for the
+             * two-way model sync); vue2 lets a props declaration (e.g.
+             * written for type checkers) shadow that data, so ignore it
+             * like the compiled-template path does */
+            const { props, ...withoutProps } = component;
+            component = withoutProps;
+        }
+        return { mixins: [component, modelMixin] };
+    };
+    /* memoize per widget, keyed on the module registry promise: a fresh
+     * component every render would never settle. A module reload provides a
+     * new promise, so hot reload gets a fresh component. */
+    const modulePromise = requestModule(moduleName);
+    if (model.__esmComponentFor !== modulePromise) {
+        // eslint-disable-next-line no-param-reassign
+        model.__esmComponentFor = modulePromise;
+        const module = getLoadedModule(moduleName);
+        if (module) {
+            /* the module is already loaded: build the component
+             * synchronously, so the widget renders in one pass and keeps
+             * el.__vue__ pointing at the component itself */
+            // eslint-disable-next-line no-param-reassign
+            model.__esmComponent = componentFromModule(module);
+        } else {
+            const factory = () => modulePromise.then(componentFromModule);
+            /* wrap the async factory in a component of our own: resolving
+             * only re-renders the factory's owner, and embedders can cache
+             * the surrounding vnodes (rendering the factory ownerless), so
+             * the owner must be an instance whose render we control */
+            // eslint-disable-next-line no-param-reassign
+            model.__esmComponent = {
+                render(h) {
+                    return h(factory);
+                },
+            };
+        }
+    }
+    return model.__esmComponent;
 }
 
 function createDataMapping(model) {
@@ -398,6 +487,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return createElement('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createEsmComponents(components) {
+    return components.reduce((accumulator, [componentName, spec]) => ({
+        ...accumulator,
+        [componentName]: getEsmComponent(spec.esm_module, spec.esm_export),
     }), {});
 }
 
