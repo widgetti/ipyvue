@@ -167,12 +167,24 @@ function createComponentObject(model, parentView) {
         }
     }
 
-    return {
+    /* With template_props_support, props declared in the template's <script>
+     * are honored (they are ignored otherwise): matching traits are passed as
+     * one-way vue props instead of two-way bound data, and the template sends
+     * changes back with $emit("update:<name>", value). */
+    const declaredProps = (vuefile.SCRIPT && vuefile.SCRIPT.props) || {};
+    const declaredPropNames = Array.isArray(declaredProps)
+        ? declaredProps : Object.keys(declaredProps);
+    const propNames = model.get('template_props_support')
+        ? modelProps(model).filter(prop => declaredPropNames.includes(prop))
+        : [];
+
+    const componentObject = {
+        props: propNames.length ? declaredProps : undefined,
         inject: ['viewCtx'],
         data() {
             // data that is only used in the template, and not synced with the backend/model
             const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
-            return { ...data, ...dataTemplate, ...createDataMapping(model) };
+            return { ...data, ...dataTemplate, ...createDataMapping(model, propNames) };
         },
         beforeCreate() {
             callVueFn('beforeCreate', this);
@@ -182,10 +194,17 @@ function createComponentObject(model, parentView) {
                 this.$root.$forceUpdate();
             };
             templateModel.on('change:template', this.__onTemplateChange);
-            addModelListeners(model, this);
+            addModelListeners(model, this, propNames);
+            if (model.get('template_props_support')) {
+                /* opt-in: $emit("update:<trait>") writing the trait (and
+                 * events as $emit) changes the meaning of existing emits,
+                 * so it only applies to templates that opted in to the
+                 * vue-like data flow */
+                addEmitListeners(model, this, parentView, propNames);
+            }
             callVueFn('created', this);
         },
-        watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch),
+        watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch, propNames),
         methods: {
             ...vuefile.SCRIPT && vuefile.SCRIPT.methods,
             ...methods,
@@ -223,22 +242,65 @@ function createComponentObject(model, parentView) {
             callVueFn('destroyed', this);
         },
     };
+
+    if (!propNames.length) {
+        return componentObject;
+    }
+
+    return {
+        data() {
+            return {
+                propValues: cloneModelValues(model, propNames),
+            };
+        },
+        created() {
+            propNames.forEach((prop) => {
+                model.on(`change:${prop}`, () => {
+                    Object.assign(this.propValues, cloneModelValues(model, [prop]));
+                });
+            });
+        },
+        render(createElement) {
+            return createElement(componentObject, {
+                props: this.propValues,
+                on: propNames.reduce((listeners, prop) => ({
+                    ...listeners,
+                    [`update:${prop}`]: (value) => {
+                        syncToModel(model, parentView, prop, value);
+                    },
+                }), {}),
+            });
+        },
+    };
 }
 
-function createDataMapping(model) {
+const NON_TEMPLATE_TRAITS = ['events', 'template', 'components', 'layout', 'css', 'scoped',
+    'scoped_css_support', 'template_props_support', 'data', 'methods'];
+
+function modelProps(model) {
     return model.keys()
-        .filter(prop => !prop.startsWith('_')
-            && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
-        .reduce((result, prop) => {
-            result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
-            return result;
-        }, {});
+        .filter(prop => !prop.startsWith('_') && !NON_TEMPLATE_TRAITS.includes(prop));
 }
 
-function addModelListeners(model, vueModel) {
+/* vue must get its own copy of a trait value: sharing the reference lets
+ * vue's reactivity mutate the model's copy in place */
+function cloneModelValues(model, props) {
+    return props.reduce((result, prop) => {
+        result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
+        return result;
+    }, {});
+}
+
+function createDataMapping(model, propNames) {
+    return cloneModelValues(model, modelProps(model).filter(prop => !propNames.includes(prop)));
+}
+
+function addModelListeners(model, vueModel, propNames) {
     model.keys()
         .filter(prop => !prop.startsWith('_')
-            && !['v_model', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
+            && !['v_model', 'components', 'layout', 'css', 'scoped', 'scoped_css_support',
+                'template_props_support', 'data', 'methods'].includes(prop)
+            && !propNames.includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
             if (_.isEqual(model.get(prop), vueModel[prop])) {
@@ -274,9 +336,39 @@ function watchesImmediately(watcher) {
     return [].concat(watcher || []).some(entry => entry && entry.immediate);
 }
 
-function createWatches(model, parentView, templateWatchers) {
+/* the single vue -> model write-back: clone so vue's reactivity never
+ * mutates the model's copy in place (that would defeat the isEqual echo
+ * check and changes would stop syncing) */
+function syncToModel(model, parentView, prop, value) {
+    model.set(prop, value === undefined ? null : _.cloneDeep(value));
+    model.save_changes(model.callbacks(parentView));
+}
+
+function addEmitListeners(model, vueModel, parentView, propNames) {
+    /* In addition to assigning to the two-way bound data, the template can
+     * sync a trait explicitly with $emit("update:<name>", value) (the vue
+     * .sync/v-model contract), and send any event listed in `events` with
+     * $emit("<name>", value) instead of calling it as a method. Traits
+     * honored as props sync via the render wrapper's update:* listeners. */
+    modelProps(model)
+        .filter(prop => !propNames.includes(prop))
+        .forEach((prop) => {
+            vueModel.$on(`update:${prop}`, (value) => {
+                if (_.isEqual(value, model.get(prop))) {
+                    return;
+                }
+                syncToModel(model, parentView, prop, value);
+            });
+        });
+    (model.get('events') || []).forEach((event) => {
+        vueModel.$on(event, (value, buffers) => vueModel[event](value, buffers));
+    });
+}
+
+function createWatches(model, parentView, templateWatchers, propNames) {
     const modelWatchers = model.keys().filter(prop => !prop.startsWith('_')
-    && !['events', 'template', 'components', 'layout', 'css', 'scoped', 'scoped_css_support', 'data', 'methods'].includes(prop))
+    && !NON_TEMPLATE_TRAITS.includes(prop)
+    && !propNames.includes(prop))
     .reduce((result, prop) => ({
         ...result,
         [prop]: {
@@ -288,9 +380,7 @@ function createWatches(model, parentView, templateWatchers) {
                 if (_.isEqual(value, model.get(prop))) {
                     return;
                 }
-
-                model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                model.save_changes(model.callbacks(parentView));
+                syncToModel(model, parentView, prop, value);
             },
             deep: true,
             immediate: watchesImmediately(templateWatchers && templateWatchers[prop]),

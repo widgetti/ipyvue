@@ -27,6 +27,14 @@ def _parse_bool_env(key: str, default: bool = False) -> bool:
 # or changed at runtime: ipyvue.scoped_css_support = True
 scoped_css_support = _parse_bool_env("IPYVUE_SCOPED_CSS_SUPPORT", False)
 
+# Honor the props declared in a VueTemplate's <script> block: matching traits
+# are passed as one-way vue props instead of two-way bound data (sync back
+# with $emit("update:<name>", value)). Off by default: templates that declare
+# props today rely on them being ignored on the template path.
+# Enable with IPYVUE_TEMPLATE_PROPS_SUPPORT=1, at runtime with
+# ipyvue.template_props_support = True, or per widget.
+template_props_support = _parse_bool_env("IPYVUE_TEMPLATE_PROPS_SUPPORT", False)
+
 
 def _jupyter_labextension_paths():
     return [
