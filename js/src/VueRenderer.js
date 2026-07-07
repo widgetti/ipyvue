@@ -4,6 +4,7 @@ import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-lin
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import * as Vue from 'vue';
+import { capitalize, makeMap } from '@vue/shared';
 
 const JupyterPhosphorWidget = base.JupyterPhosphorWidget || base.JupyterLuminoWidget;
 
@@ -167,12 +168,44 @@ function createAttrsMapping(model) {
         }, {});
 }
 
+const isEventOptionModifier = makeMap('passive,once,capture');
+const isNonKeyModifier = makeMap('stop,prevent,self,ctrl,shift,alt,meta,exact,middle');
+const maybeKeyModifier = makeMap('left,right');
+const isKeyboardEvent = makeMap('keyup,keydown,keypress');
+
 function addEventWithModifiers(eventAndModifiers, obj, fn) { // eslint-disable-line no-unused-vars
     const [event, ...mods] = eventAndModifiers.split(".");
+    let eventName = event;
+    const keyMods = [];
+    const eventMods = [];
+    const optionMods = [];
+
+    mods.forEach((mod) => {
+        if (isEventOptionModifier(mod)) {
+            optionMods.push(mod);
+        } else if (maybeKeyModifier(mod)) {
+            (isKeyboardEvent(event) ? keyMods : eventMods).push(mod);
+        } else if (isNonKeyModifier(mod)) {
+            eventMods.push(mod);
+        } else {
+            keyMods.push(mod);
+        }
+    });
+
+    if (eventName === 'click' && eventMods.includes('right')) {
+        eventName = 'contextmenu';
+    }
+    if (eventName === 'click' && eventMods.includes('middle')) {
+        eventName = 'mouseup';
+    }
+
+    const eventHandler = eventMods.length ? Vue.withModifiers(fn, eventMods) : fn;
+    const handler = keyMods.length && isKeyboardEvent(event) ? Vue.withKeys(eventHandler, keyMods) : eventHandler;
+    const optionSuffix = optionMods.map(capitalize).join('');
 
     return {
         ...obj,
-        [`on${event.charAt(0).toUpperCase()}${event.slice(1)}`]: Vue.withModifiers(fn, mods),
+        [`on${capitalize(eventName)}${optionSuffix}`]: handler,
     };
 }
 
