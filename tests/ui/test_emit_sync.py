@@ -27,7 +27,7 @@ class CounterTemplate(vue.VueTemplate):
 def test_emit_update_sync(solara_test, page_session: playwright.sync_api.Page):
     # $emit("update:count", ...) is the explicit way to sync a trait back to
     # the model (the vue .sync/v-model contract), next to assigning the data
-    widget = CounterTemplate()
+    widget = CounterTemplate(template_props_support=True)
     display(widget)
 
     button = page_session.locator(".props-mode-btn")
@@ -60,7 +60,7 @@ def test_emit_event(solara_test, page_session: playwright.sync_api.Page):
         def vue_save(self, data):
             self.saved_with = data
 
-    widget = SaveTemplate()
+    widget = SaveTemplate(template_props_support=True)
     display(widget)
 
     button = page_session.locator(".props-mode-save")

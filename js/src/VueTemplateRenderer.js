@@ -195,7 +195,13 @@ function createComponentObject(model, parentView) {
             };
             templateModel.on('change:template', this.__onTemplateChange);
             addModelListeners(model, this, propNames);
-            addEmitListeners(model, this, parentView, propNames);
+            if (model.get('template_props_support')) {
+                /* opt-in: $emit("update:<trait>") writing the trait (and
+                 * events as $emit) changes the meaning of existing emits,
+                 * so it only applies to templates that opted in to the
+                 * vue-like data flow */
+                addEmitListeners(model, this, parentView, propNames);
+            }
             callVueFn('created', this);
         },
         watch: createWatches(model, parentView, vuefile.SCRIPT && vuefile.SCRIPT.watch, propNames),

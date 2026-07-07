@@ -70,3 +70,30 @@ def test_template_props_ignored_by_default(
     page_session.locator(".props-assign-btn").click()
     page_session.locator("text=emit 100").wait_for()
     assert widget.count == 100
+
+
+class EmitWithoutOptIn(vue.VueTemplate):
+    value = traitlets.Int(1).tag(sync=True)
+
+    @traitlets.default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div class="emit-no-optin" @click="$emit('update:value', 99)">
+                value: {{ value }}
+            </div>
+        </template>
+        """
+
+
+def test_emit_sync_requires_opt_in(solara_test, page_session: playwright.sync_api.Page):
+    # without template_props_support, $emit("update:<trait>") keeps its old
+    # meaning (a plain vue event, no model write) so existing templates
+    # cannot change behavior
+    widget = EmitWithoutOptIn()
+    display(widget)
+    el = page_session.locator(".emit-no-optin")
+    el.wait_for()
+    el.click()
+    page_session.wait_for_timeout(300)
+    assert widget.value == 1
