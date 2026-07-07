@@ -250,16 +250,13 @@ function createComponentObject(model, parentView) {
     return {
         data() {
             return {
-                propValues: propNames.reduce((values, prop) => ({
-                    ...values,
-                    [prop]: _.cloneDeep(model.get(prop)),
-                }), {}),
+                propValues: cloneModelValues(model, propNames),
             };
         },
         created() {
             propNames.forEach((prop) => {
                 model.on(`change:${prop}`, () => {
-                    this.propValues[prop] = _.cloneDeep(model.get(prop));
+                    Object.assign(this.propValues, cloneModelValues(model, [prop]));
                 });
             });
         },
@@ -285,13 +282,17 @@ function modelProps(model) {
         .filter(prop => !prop.startsWith('_') && !NON_TEMPLATE_TRAITS.includes(prop));
 }
 
+/* vue must get its own copy of a trait value: sharing the reference lets
+ * vue's reactivity mutate the model's copy in place */
+function cloneModelValues(model, props) {
+    return props.reduce((result, prop) => {
+        result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
+        return result;
+    }, {});
+}
+
 function createDataMapping(model, propNames) {
-    return modelProps(model)
-        .filter(prop => !propNames.includes(prop))
-        .reduce((result, prop) => {
-            result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
-            return result;
-        }, {});
+    return cloneModelValues(model, modelProps(model).filter(prop => !propNames.includes(prop)));
 }
 
 function addModelListeners(model, vueModel, propNames) {
