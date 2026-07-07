@@ -269,8 +269,7 @@ function createComponentObject(model, parentView) {
                 on: propNames.reduce((listeners, prop) => ({
                     ...listeners,
                     [`update:${prop}`]: (value) => {
-                        model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                        model.save_changes(model.callbacks(parentView));
+                        syncToModel(model, parentView, prop, value);
                     },
                 }), {}),
             });
@@ -336,6 +335,14 @@ function watchesImmediately(watcher) {
     return [].concat(watcher || []).some(entry => entry && entry.immediate);
 }
 
+/* the single vue -> model write-back: clone so vue's reactivity never
+ * mutates the model's copy in place (that would defeat the isEqual echo
+ * check and changes would stop syncing) */
+function syncToModel(model, parentView, prop, value) {
+    model.set(prop, value === undefined ? null : _.cloneDeep(value));
+    model.save_changes(model.callbacks(parentView));
+}
+
 function addEmitListeners(model, vueModel, parentView, propNames) {
     /* In addition to assigning to the two-way bound data, the template can
      * sync a trait explicitly with $emit("update:<name>", value) (the vue
@@ -349,8 +356,7 @@ function addEmitListeners(model, vueModel, parentView, propNames) {
                 if (_.isEqual(value, model.get(prop))) {
                     return;
                 }
-                model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                model.save_changes(model.callbacks(parentView));
+                syncToModel(model, parentView, prop, value);
             });
         });
     (model.get('events') || []).forEach((event) => {
@@ -373,9 +379,7 @@ function createWatches(model, parentView, templateWatchers, propNames) {
                 if (_.isEqual(value, model.get(prop))) {
                     return;
                 }
-
-                model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                model.save_changes(model.callbacks(parentView));
+                syncToModel(model, parentView, prop, value);
             },
             deep: true,
             immediate: watchesImmediately(templateWatchers && templateWatchers[prop]),
