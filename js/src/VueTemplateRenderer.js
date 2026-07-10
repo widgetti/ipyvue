@@ -1,5 +1,5 @@
 import { WidgetModel } from '@jupyter-widgets/base';
-import uuid4 from 'uuid/v4';
+import { v4 as uuid4 } from 'uuid';
 import _ from 'lodash';
 import * as Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
