@@ -3,7 +3,10 @@ import { parse, compileScript, compileStyle, compileTemplate } from 'vue/compile
 import esModuleShims from './es-module-shims-txt.js'
 import {transform} from "sucrase";
 
-window.esmsInitOptions = { shimMode: true };
+/* es-module-shims reads this global once, and there is only one shim per page
+ * (see loadShim below), so merge instead of overwrite: ipyreact needs
+ * mapOverrides to re-point an import map entry on hot reload, and so do we. */
+window.esmsInitOptions = { ...window.esmsInitOptions, shimMode: true, mapOverrides: true };
 
 function patchCompiledTemplateCode(code) {
     /* Vuetify slot props can contain a Vue ref object in \`ref\`. Passing that through
