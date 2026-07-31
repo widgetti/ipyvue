@@ -6,7 +6,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import { TemplateModel } from './Template';
-import {getAsyncComponent} from "./esmVueTemplate";
+import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVueTemplate";
 
 export function vueTemplateRender(model, parentView) {
     return Vue.h(createComponentObject(model, parentView));
@@ -30,8 +30,22 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
+
+    const esmModule = templateModel.get('esm_module');
+    if (esmModule) {
+        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), {
+            ...createModelMixin(model, templateModel, parentView),
+            components: {
+                ...createInstanceComponents(instanceComponents, parentView),
+                ...createClassComponents(classComponents, model, parentView),
+                ...createFullVueComponents(fullVueComponents),
+                ...createEsmComponents(esmComponents),
+            },
+        });
+    }
 
     return getAsyncComponent(
         template,
@@ -41,6 +55,7 @@ function createComponentObject(model, parentView) {
                 ...createInstanceComponents(instanceComponents, parentView),
                 ...createClassComponents(classComponents, model, parentView),
                 ...createFullVueComponents(fullVueComponents),
+                ...createEsmComponents(esmComponents),
             },
         },
         {
@@ -231,6 +246,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return Vue.h('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createEsmComponents(components) {
+    return components.reduce((accumulator, [componentName, spec]) => ({
+        ...accumulator,
+        [componentName]: getEsmComponent(spec.esm_module, spec.esm_export),
     }), {});
 }
 

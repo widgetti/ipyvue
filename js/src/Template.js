@@ -11,6 +11,8 @@ class TemplateModel extends WidgetModel {
             ...{
                 _model_name: 'TemplateModel',
                 source_url: null,
+                esm_module: null,
+                esm_export: null,
             },
         };
     }
