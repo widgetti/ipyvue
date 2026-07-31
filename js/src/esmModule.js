@@ -1,7 +1,10 @@
 import Vue from 'vue';
 import esModuleShims from './es-module-shims-txt';
 
-window.esmsInitOptions = { shimMode: true };
+/* es-module-shims reads this global once, and there is only one shim per page
+ * (see init below), so merge instead of overwrite: ipyreact needs mapOverrides
+ * to re-point an import map entry on hot reload, and so do we. */
+window.esmsInitOptions = { ...window.esmsInitOptions, shimMode: true, mapOverrides: true };
 
 /* Roots created by VueView: re-rendered when a module plugin registers
  * components after they already rendered (unknown tags resolve on the
