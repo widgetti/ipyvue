@@ -48,7 +48,7 @@ def convert_version_string(version_string):
         return new_version_string
     else:
         # If the pattern is not found, return the original string
-        return version_string + "nomatch"
+        return version_string
 
 
 def get_data_files():
