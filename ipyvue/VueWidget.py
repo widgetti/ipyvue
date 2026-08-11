@@ -117,7 +117,7 @@ class Events(object):
         Note that this does not trigger a click event in the browser, this only
         invokes the Python event handlers.
         """
-        self.fire_event("click", data or {})
+        self.fire_event("click", data)
 
     def _fire_event(self, event, data=None):
         dispatcher = self._event_handlers_map[event]
@@ -173,6 +173,8 @@ class VueWidget(DOMWidget, Events):
     attributes = Dict(None, allow_none=True).tag(sync=True)
 
     v_slots = List(Dict()).tag(sync=True, **widget_serialization)
+
+    v_bind = Unicode(None, allow_none=True).tag(sync=True)
 
     v_on = Unicode(None, allow_none=True).tag(sync=True)
 

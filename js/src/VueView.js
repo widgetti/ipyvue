@@ -1,6 +1,9 @@
 import { DOMWidgetView } from '@jupyter-widgets/base';
-import Vue from 'vue';
+import * as Vue from 'vue';
 import { vueRender } from './VueRenderer';
+import {addApp, removeApp} from "./VueComponentModel";
+
+window.Vue = Vue;
 
 export function createViewContext(view) {
     return {
@@ -15,24 +18,51 @@ export function createViewContext(view) {
 }
 
 export class VueView extends DOMWidgetView {
+    vueComponent() {
+        const view = this;
+        return {
+            provide: {
+                viewCtx: createViewContext(view),
+            },
+            setup: () => {
+                view.onSetup();
+                return () => vueRender(view.model, view, {});
+            },
+        };
+    }
+
+    vueRender() {
+        return Vue.h(this.vueComponent());
+    }
+
     remove() {
-        this.vueApp.$destroy();
+        this.vueApp.unmount();
+        removeApp(this.vueApp);
         return super.remove();
     }
 
     render() {
         super.render();
-        this.displayed.then(() => {
-            const vueEl = document.createElement('div');
-            this.el.appendChild(vueEl);
+        (async () => {
+            const br = this.beforeViewRender();
+            await this.displayed;
+            await br;
 
-            this.vueApp = new Vue({
-                el: vueEl,
-                provide: {
-                    viewCtx: createViewContext(this),
-                },
-                render: createElement => vueRender(createElement, this.model, this, {}),
-            });
-        });
+            this.vueApp = Vue.createApp(this.vueComponent());
+
+            addApp(this.vueApp, this.model.widget_manager);
+            this.addPlugins(this.vueApp);
+            this.vueApp.mount(this.el);
+        })()
+
+    }
+
+    addPlugins(vueApp) {
+    }
+
+    onSetup() {
+    }
+
+    async beforeViewRender() {
     }
 }

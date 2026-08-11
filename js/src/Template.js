@@ -10,6 +10,7 @@ class TemplateModel extends WidgetModel {
             ...super.defaults(),
             ...{
                 _model_name: 'TemplateModel',
+                source_url: null,
             },
         };
     }

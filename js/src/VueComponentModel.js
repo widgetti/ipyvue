@@ -1,8 +1,51 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel } from '@jupyter-widgets/base';
-import Vue from 'vue';
-import httpVueLoader from './httpVueLoader';
 import {TemplateModel} from './Template';
+import { jupyterWidgetComponent } from './VueTemplateRenderer';
+import {getAsyncComponent} from "./esmVueTemplate";
+import { version } from './version';
+
+const apps = new Set();
+const appsWithBaseComponents = new WeakSet();
+const registeredComponentsByApp = new WeakMap();
+
+export function addApp(app, widget_manager) {
+    apps.add(app);
+
+    if (!appsWithBaseComponents.has(app)) {
+        app.component('jupyter-widget', jupyterWidgetComponent());
+        appsWithBaseComponents.add(app);
+    }
+
+    return syncComponentModels(app, widget_manager);
+}
+
+async function syncComponentModels(app, widget_manager) {
+    const models = await Promise.all(Object.values(widget_manager._models));
+    models
+        .filter(model => model instanceof VueComponentModel)
+        .forEach(model => registerComponentModel(app, model))
+}
+
+export function removeApp(app) {
+    apps.delete(app);
+}
+
+function registerComponentModel(app, model) {
+    let registeredComponents = registeredComponentsByApp.get(app);
+    if (!registeredComponents) {
+        registeredComponents = new Map();
+        registeredComponentsByApp.set(app, registeredComponents);
+    }
+
+    if (registeredComponents.get(model.model_id) === model.compiledComponent) {
+        return;
+    }
+
+    const name = model.get('name');
+    app.component(name, model.compiledComponent);
+    registeredComponents.set(model.model_id, model.compiledComponent);
+}
 
 export class VueComponentModel extends DOMWidgetModel {
     defaults() {
@@ -11,9 +54,10 @@ export class VueComponentModel extends DOMWidgetModel {
             ...{
                 _model_name: 'VueComponentModel',
                 _model_module: 'jupyter-vue',
-                _model_module_version: '^0.0.3',
+                _model_module_version: version,
                 name: null,
                 component: null,
+                source_url: null,
             },
         };
     }
@@ -24,9 +68,20 @@ export class VueComponentModel extends DOMWidgetModel {
         const [, { widget_manager }] = args;
 
         const name = this.get('name');
-        Vue.component(name, httpVueLoader(this.get('component')));
+
+        const compileComponent = () => {
+            this.compiledComponent = getAsyncComponent(this.get('component'), {}, {
+                styleOwnerKey: `component-${this.model_id}`,
+                sourceURL: this.get('source_url') || `ipyvue-component-${this.model_id}.vue`,
+            });
+        };
+
+        compileComponent();
+
+        apps.forEach(app => registerComponentModel(app, this));
         this.on('change:component', () => {
-            Vue.component(name, httpVueLoader(this.get('component')));
+            compileComponent();
+            apps.forEach(app => registerComponentModel(app, this));
 
             (async () => {
                 const models = await Promise.all(Object.values(widget_manager._models));
@@ -59,6 +114,10 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 affectedTemplateModels.forEach(model => model.trigger('change:template'));
             })();
+        });
+        this.on('change:source_url', () => {
+            compileComponent();
+            apps.forEach(app => registerComponentModel(app, this));
         });
     }
 }

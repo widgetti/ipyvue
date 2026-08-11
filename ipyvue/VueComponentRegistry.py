@@ -11,20 +11,22 @@ class VueComponent(DOMWidget):
 
     name = Unicode().tag(sync=True)
     component = Unicode().tag(sync=True)
+    source_url = Unicode(None, allow_none=True).tag(sync=True)
 
 
 vue_component_registry = {}
 vue_component_files = {}
 
 
-def register_component_from_string(name, value):
+def register_component_from_string(name, value, source_url=None):
     components = vue_component_registry
 
     if name in components.keys():
         comp = components[name]
         comp.component = value
+        comp.source_url = source_url
     else:
-        comp = VueComponent(name=name, component=value)
+        comp = VueComponent(name=name, component=value, source_url=source_url)
         components[name] = comp
 
 
@@ -37,9 +39,12 @@ def register_component_from_file(name, file_name, relative_to_file=None):
 
     if relative_to_file:
         file_name = os.path.join(os.path.dirname(relative_to_file), file_name)
+    abs_path = os.path.abspath(file_name)
     with open(file_name) as f:
-        vue_component_files[os.path.abspath(file_name)] = name
-        register_component_from_string(name, f.read())
+        vue_component_files[abs_path] = name
+        register_component_from_string(
+            name, f.read(), source_url=os.path.basename(abs_path)
+        )
 
 
 __all__ = [

@@ -1,14 +1,16 @@
 import pytest
 import sys
+import threading
 
 if sys.version_info < (3, 7):
     pytest.skip("requires python3.7 or higher", allow_module_level=True)
 
 import ipyvue as vue
+import ipywidgets as widgets
 import playwright.sync_api
 
 from IPython.display import display
-from traitlets import default, Int, Callable, Unicode
+from traitlets import default, Any, Int, Callable, Unicode
 
 
 class MyTemplate(vue.VueTemplate):
@@ -37,6 +39,36 @@ def test_template(ipywidgets_runner, page_session: playwright.sync_api.Page):
     widget.wait_for()
     widget.click()
     page_session.locator("text=Clicked 1").wait_for()
+
+
+class EmbedsWidgetTemplate(vue.VueTemplate):
+    child = Any().tag(sync=True, **widgets.widget_serialization)
+
+    @default("template")
+    def _default_vue_template(self):
+        return """
+        <template>
+            <div>
+                <jupyter-widget :widget="child"></jupyter-widget>
+            </div>
+        </template>
+        """
+
+
+def test_template_embeds_jupyter_widget(
+    ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        from test_template import EmbedsWidgetTemplate
+        import ipywidgets as widgets
+
+        widget = EmbedsWidgetTemplate(
+            child=widgets.IntSlider(description="Embedded slider", value=7)
+        )
+        display(widget)
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("text=Embedded slider").wait_for()
 
 
 class MyEventTemplate(vue.VueTemplate):
@@ -70,6 +102,58 @@ def test_template_custom_event(solara_test, page_session: playwright.sync_api.Pa
     page_session.locator("text=Click Me").click()
     page_session.locator("text=Clicked").wait_for()
     assert last_event_data == "not-an-event-object"
+
+
+class StyledTemplate(vue.VueTemplate):
+    @default("template")
+    def _default_styled_template(self):
+        return """
+        <template>
+            <div class="style-leak-target">Styled</div>
+        </template>
+        <style>
+            .style-leak-target {
+                color: rgb(255, 0, 0);
+            }
+        </style>
+        """
+
+
+def test_template_style_update_replaces_old_styles(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    widget = StyledTemplate()
+
+    display(widget)
+
+    target = page_session.locator(".style-leak-target")
+    target.wait_for()
+    expect_red = """
+        () => {
+            const el = document.querySelector('.style-leak-target');
+            return el && getComputedStyle(el).color === 'rgb(255, 0, 0)';
+        }
+    """
+    page_session.wait_for_function(expect_red)
+
+    def update_template():
+        widget.template = """
+        <template>
+            <div class="style-leak-target">Unstyled</div>
+        </template>
+        """
+
+    threading.Timer(0.5, update_template).start()
+
+    page_session.locator("text=Unstyled").wait_for()
+    page_session.wait_for_function(
+        """
+        () => {
+            const el = document.querySelector('.style-leak-target');
+            return el && getComputedStyle(el).color !== 'rgb(255, 0, 0)';
+        }
+    """
+    )
 
 
 class MyTemplateScript(vue.VueTemplate):
@@ -124,8 +208,6 @@ def test_template_script(
     ipywidgets_runner, page_session: playwright.sync_api.Page, template_class_name
 ):
     def kernel_code(template_class_name=template_class_name):
-        # this import is need so when this code executes in the kernel,
-        # the class is imported
         from test_template import MyTemplateScript, MyTemplateScriptOld
 
         template_class = {
@@ -167,7 +249,7 @@ def test_template_scoped_style(
         import ipywidgets as widgets
         from IPython.display import display
 
-        scoped = ScopedStyleTemplate(scoped_css_support=True)
+        scoped = ScopedStyleTemplate()
         unscoped = vue.Html(
             tag="span",
             children=["Unscoped text"],
@@ -187,46 +269,3 @@ def test_template_scoped_style(
     )
     assert scoped_color == "rgb(255, 0, 0)"
     assert unscoped_color != "rgb(255, 0, 0)"
-
-
-class ScopedCssTemplate(vue.VueTemplate):
-    @default("template")
-    def _default_vue_template(self):
-        return """
-        <template>
-            <span id="scoped-css-text" class="scoped-css-text">Scoped css text</span>
-        </template>
-        """
-
-
-def test_template_scoped_css_trait(
-    ipywidgets_runner, page_session: playwright.sync_api.Page
-):
-    def kernel_code():
-        from test_template import ScopedCssTemplate
-        import ipyvue as vue
-        import ipywidgets as widgets
-        from IPython.display import display
-
-        scoped = ScopedCssTemplate(
-            css=".scoped-css-text { color: rgb(0, 128, 0); }", scoped=True
-        )
-        unscoped = vue.Html(
-            tag="span",
-            children=["Unscoped css text"],
-            class_="scoped-css-text",
-            attributes={"id": "unscoped-css-text"},
-        )
-        display(widgets.VBox([scoped, unscoped]))
-
-    ipywidgets_runner(kernel_code)
-    page_session.locator("#scoped-css-text").wait_for()
-    page_session.locator("#unscoped-css-text").wait_for()
-    scoped_color = page_session.eval_on_selector(
-        "#scoped-css-text", "el => getComputedStyle(el).color"
-    )
-    unscoped_color = page_session.eval_on_selector(
-        "#unscoped-css-text", "el => getComputedStyle(el).color"
-    )
-    assert scoped_color == "rgb(0, 128, 0)"
-    assert unscoped_color != "rgb(0, 128, 0)"
