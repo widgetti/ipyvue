@@ -86,18 +86,27 @@ class Events(object):
         ]:
             del self._event_handlers_map[existing_event]
 
-        self._event_handlers_map[event_and_modifiers] = CallbackDispatcher()
+        if isinstance(callback, str):
+            self._event_handlers_map[event_and_modifiers] = callback
+        else:
+            self._event_handlers_map[event_and_modifiers] = CallbackDispatcher()
 
-        self._event_handlers_map[event_and_modifiers].register_callback(
-            callback, remove=remove
-        )
+            self._event_handlers_map[event_and_modifiers].register_callback(
+                callback, remove=remove
+            )
 
-        if remove and not self._event_handlers_map[event_and_modifiers].callbacks:
+        if remove and (
+            isinstance(self._event_handlers_map[event_and_modifiers], str)
+            or not self._event_handlers_map[event_and_modifiers].callbacks
+        ):
             del self._event_handlers_map[event_and_modifiers]
 
         difference = set(self._event_handlers_map.keys()) ^ set(self._events)
         if len(difference) != 0:
-            self._events = list(self._event_handlers_map.keys())
+            self._events = {
+                k: v if isinstance(v, str) else None
+                for k, v in self._event_handlers_map.items()
+            }
 
     def fire_event(self, event, data=None):
         """Manually trigger an event handler on the Python side."""
@@ -162,7 +171,7 @@ class VueWidget(DOMWidget, Events):
 
     slot = Unicode(None, allow_none=True).tag(sync=True)
 
-    _events = List(Unicode()).tag(sync=True)
+    _events = Dict(None, allow_none=True).tag(sync=True)
 
     v_model = Any("!!disabled!!", allow_none=True).tag(sync=True)
 
