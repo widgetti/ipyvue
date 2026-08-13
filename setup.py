@@ -166,7 +166,10 @@ class NPM(Command):
                 stderr=sys.stderr,
             )
             check_call(
-                [npmName, "pack"], cwd=node_root, stdout=sys.stdout, stderr=sys.stderr
+                [npmName, "pack", "--ignore-scripts"],
+                cwd=node_root,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
             )
             os.utime(self.node_modules, None)
 
