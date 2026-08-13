@@ -20,4 +20,7 @@ module.exports = {
         '@vue/compiler-sfc/dist/compiler-sfc.esm-browser.js'
       ),
   ],
+  performance: {
+    maxAssetSize: 800_000,
+  },
 };
