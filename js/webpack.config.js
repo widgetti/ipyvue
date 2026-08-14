@@ -9,6 +9,14 @@ const plugins = [
     })
 ]
 
+const ignoreWarnings = [
+    (warning) =>
+        warning.message.includes('Critical dependency') &&
+        warning.module?.resource?.includes(
+            '@vue/compiler-sfc/dist/compiler-sfc.esm-browser.js'
+        ),
+];
+
 module.exports = [
     {
         entry: './lib/extension.js',
@@ -19,6 +27,7 @@ module.exports = [
         },
         mode: 'production',
         plugins,
+        ignoreWarnings,
     },
     {
         entry: './lib/index.js',
@@ -40,6 +49,7 @@ module.exports = [
             },
         },
         plugins,
+        ignoreWarnings,
     },
     {
         entry: './lib/nodeps.js',
@@ -61,6 +71,7 @@ module.exports = [
             },
         },
         plugins,
+        ignoreWarnings,
     },
     {
         entry: './lib/nodeps.js',
@@ -83,6 +94,7 @@ module.exports = [
             },
         },
         plugins,
+        ignoreWarnings,
     },
     {
         entry: './lib/embed.js',
@@ -105,5 +117,6 @@ module.exports = [
             },
         },
         plugins,
+        ignoreWarnings,
     },
 ];

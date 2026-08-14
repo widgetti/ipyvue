@@ -1,2 +1,3 @@
-// export const { version } = require('../package.json');
-export { version } from '../package.json'
+import packageJson from '../package.json';
+
+export const version = packageJson.version;
