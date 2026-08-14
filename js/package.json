@@ -7,7 +7,7 @@
   "main": "lib/index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mariobuikhuizen/ipyvue.git"
+    "url": "https://github.com/widgetti/ipyvue.git"
   },
   "keywords": [
     "jupyter",

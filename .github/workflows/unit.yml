@@ -187,13 +187,15 @@ jobs:
           if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
           npm publish --dry-run --tag ${TAG} --access public *.tgz
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PRE_RELEASE: ${{ github.event.release.prerelease }}
 
   release:
     if: startsWith(github.event.ref, 'refs/tags/v')
     needs: [release-dry-run]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -228,5 +230,4 @@ jobs:
           if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
           npm publish --tag ${TAG} --access public *.tgz
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PRE_RELEASE: ${{ github.event.release.prerelease }}
