@@ -55,7 +55,7 @@
   "dependencies": {
     "@jupyter-widgets/base": "^1 || ^2 || ^3 || ^4",
     "@mariobuikhuizen/vue-compiler-addon": "^2.6.10-alpha.2",
-    "core-js": "^3.0.1",
+    "core-js": "^3.50.0",
     "lodash": "^4.17.11",
     "uuid": "^3.4.0",
     "vue": "^2.6.10"
