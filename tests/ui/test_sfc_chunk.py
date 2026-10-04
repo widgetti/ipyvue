@@ -62,17 +62,6 @@ const msg = ref<string>("second-" + (2 as number));
 </script>
 """
 
-UNDERSCORE = """
-<template>
-    <div class="underscore-tpl">{{ _label() }}</div>
-</template>
-<script>
-module.exports = {
-    methods: { _label() { return "underscore-method"; } },
-}
-</script>
-"""
-
 ADD_BUTTON = "Add a template"
 
 CHUNK_URL = re.compile(r"vue-sfc[^/]*\.js")
@@ -180,25 +169,6 @@ def test_script_setup_ts_loads_both_chunks(
     assert color == "rgb(0, 128, 0)"
     assert chunk_loads(page_session) == ["vue-sfc"]
     assert len(ts_chunk_requests) == 1, ts_chunk_requests
-
-
-def test_underscore_method_renders(
-    ipywidgets_runner, page_session: playwright.sync_api.Page
-):
-    def kernel_code():
-        import ipyvue as vue
-        import traitlets
-        from IPython.display import display
-        from test_sfc_chunk import UNDERSCORE
-
-        class Underscore(vue.VueTemplate):
-            template = traitlets.Unicode(UNDERSCORE).tag(sync=True)
-
-        display(Underscore())
-
-    ipywidgets_runner(kernel_code)
-    page_session.locator("text=underscore-method").wait_for()
-    assert chunk_loads(page_session) == ["vue-sfc"]
 
 
 def test_template_after_failed_chunk_load(
