@@ -1,6 +1,6 @@
-"""The SFC compiler (@vue/compiler-sfc and sucrase) is a lazy chunk named
-vue-sfc. The first template on a page loads it, once, and every template
-renders as before."""
+"""The SFC compiler (@vue/compiler-sfc) is a lazy chunk named vue-sfc. The
+first template on a page loads it, once, and every template renders as before.
+sucrase is a second lazy chunk, vue-sfc-ts, which only <script lang="ts"> loads."""
 
 import re
 import pytest
@@ -66,6 +66,7 @@ module.exports = {
 ADD_BUTTON = "Add a template"
 
 CHUNK_URL = re.compile(r"vue-sfc[^/]*\.js")
+TS_CHUNK_URL = re.compile(r"vue-sfc-ts[^/]*\.js")
 CHUNK_SCRIPT_GONE = "!document.querySelector('script[src*=\"vue-sfc\"]')"
 
 RECORD_CHUNK_LOADS = """(() => {
@@ -90,6 +91,24 @@ def record_chunk_loads(page_session: playwright.sync_api.Page):
 
 def chunk_loads(page: playwright.sync_api.Page):
     return page.evaluate("window.__ipyvueChunkLoads.map((detail) => detail.chunk)")
+
+
+@pytest.fixture
+def ts_chunk_requests(page_session: playwright.sync_api.Page):
+    """Lists the requests for the vue-sfc-ts chunk (sucrase). No host preloads
+    this chunk, so the network requests count. Put this fixture before
+    ipywidgets_runner, which opens the page."""
+    urls = []
+
+    def on_request(request):
+        if TS_CHUNK_URL.search(request.url):
+            urls.append(request.url)
+
+    page_session.on("request", on_request)
+    try:
+        yield urls
+    finally:
+        page_session.remove_listener("request", on_request)
 
 
 def test_plain_templates_load_sfc_chunk_once(
@@ -127,8 +146,8 @@ def test_plain_templates_load_sfc_chunk_once(
     assert chunk_loads(page_session) == ["vue-sfc"]
 
 
-def test_script_setup_loads_sfc_chunk(
-    ipywidgets_runner, page_session: playwright.sync_api.Page
+def test_script_setup_ts_loads_both_chunks(
+    ts_chunk_requests, ipywidgets_runner, page_session: playwright.sync_api.Page
 ):
     def kernel_code():
         import ipyvue as vue
@@ -148,6 +167,28 @@ def test_script_setup_loads_sfc_chunk(
     )
     assert color == "rgb(0, 128, 0)"
     assert chunk_loads(page_session) == ["vue-sfc"]
+    assert len(ts_chunk_requests) == 1, ts_chunk_requests
+
+
+def test_plain_template_does_not_load_ts_chunk(
+    ts_chunk_requests, ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    def kernel_code():
+        import ipyvue as vue
+        import traitlets
+        from IPython.display import display
+        from test_sfc_chunk import PLAIN
+
+        class Plain(vue.VueTemplate):
+            clicks = traitlets.Int(0).tag(sync=True)
+            template = traitlets.Unicode(PLAIN).tag(sync=True)
+
+        display(Plain())
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("text=Plain 0 from-script").wait_for()
+    assert chunk_loads(page_session) == ["vue-sfc"]
+    assert ts_chunk_requests == []
 
 
 def test_underscore_method_renders(

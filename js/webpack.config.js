@@ -15,6 +15,8 @@ const plugins = [
  *         onerror="event.target.remove()">.
  * webpack reuses a tag with that src or data-webpack, also one that already failed, and then
  * waits 120 s for it; onerror removes a failed tag, so webpack adds a new one.
+ * The vue-sfc-ts chunk (sucrase, see src/sfcCompiler.js) has a stable name in the same way:
+ * nodeps-vue-sfc-ts.js and index-vue-sfc-ts.js.
  * index.js and nodeps.js share a folder, so each has its own chunk file name and its
  * own uniqueName (chunk loading global): a chunk must not install into the other runtime.
  * The nbextension builds set a static publicPath, which src/publicPath.js replaces. With

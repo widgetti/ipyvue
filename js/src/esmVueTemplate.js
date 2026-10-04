@@ -6,9 +6,9 @@ import esModuleShims from './es-module-shims-txt.js'
  * mapOverrides to re-point an import map entry on hot reload, and so do we. */
 window.esmsInitOptions = { ...window.esmsInitOptions, shimMode: true, mapOverrides: true };
 
-/* @vue/compiler-sfc and sucrase are large, so they are in the vue-sfc chunk
- * (sfcCompiler.js), which loads when the first template compiles. Hosts can preload
- * it, see webpack.config.js.
+/* @vue/compiler-sfc is large, so it is in the vue-sfc chunk (sfcCompiler.js), which
+ * loads when the first template compiles. Hosts can preload it, see webpack.config.js.
+ * sucrase (for <script lang="ts">) is in a second chunk, vue-sfc-ts, see sfcCompiler.js.
  */
 let sfcCompilerPromise = null;
 

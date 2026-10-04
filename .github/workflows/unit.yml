@@ -61,15 +61,20 @@ jobs:
           cd js
           npm pack
 
-      - name: Check that the SFC compiler is only in the vue-sfc chunk
+      - name: Check that the SFC compiler is only in the vue-sfc chunks
         run: |
           cd ipyvue/nbextension
-          ls -l nodeps.js index.js nodeps-vue-sfc.js index-vue-sfc.js
+          ls -l nodeps.js index.js nodeps-vue-sfc.js index-vue-sfc.js nodeps-vue-sfc-ts.js index-vue-sfc-ts.js
           test $(wc -c < nodeps.js) -lt 200000
           test $(wc -c < index.js) -lt 400000
           grep -q compileScript nodeps-vue-sfc.js
           grep -q compileScript index-vue-sfc.js
           if grep -l compileScript nodeps.js index.js; then echo "compiler-sfc is in the main bundle"; exit 1; fi
+          # an option name of sucrase, kept as a string by the minifier
+          marker=enableLegacyTypeScriptModuleInterop
+          grep -q $marker nodeps-vue-sfc-ts.js
+          grep -q $marker index-vue-sfc-ts.js
+          if grep -l $marker nodeps.js index.js nodeps-vue-sfc.js index-vue-sfc.js; then echo "sucrase is outside the vue-sfc-ts chunk"; exit 1; fi
 
       - name: Check number of files in wheel
         run: |

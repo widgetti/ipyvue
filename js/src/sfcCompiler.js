@@ -1,8 +1,8 @@
-/* The vue-sfc chunk: @vue/compiler-sfc, sucrase and the template compile code.
+/* The vue-sfc chunk: @vue/compiler-sfc and the template compile code.
  * esmVueTemplate.js loads it when the first template compiles.
+ * sucrase is in its own chunk, vue-sfc-ts, which loads at the first <script lang="ts">.
  */
 import { parse, compileScript, compileStyle, compileTemplate } from 'vue/compiler-sfc'
-import {transform} from "sucrase";
 import { init, toModule } from './esmVueTemplate';
 
 function patchCompiledTemplateCode(code) {
@@ -130,7 +130,8 @@ export async function compileSfc(sfcStr, mixin, options = {}) {
     let compiledScript = (script || scriptSetup) && compileScript(parsedTemplate.descriptor, {id: scopeId});
 
     const code = compiledScript && (compiledScript.lang === "ts"
-        ? transform(compiledScript.content, { transforms: ["typescript"] }).code
+        ? (await import(/* webpackChunkName: "vue-sfc-ts" */ 'sucrase'))
+            .transform(compiledScript.content, { transforms: ["typescript"] }).code
         : compiledScript.content);
 
     let {setup, ...rest} = code ? (await toModule(code, `${sourceURL}?script`)).default : {}
