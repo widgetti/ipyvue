@@ -9,6 +9,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # npm dist-tag for releases from this branch. npm's "latest" tag belongs to the
+  # newest major (3.x); a 1.x release with "latest" would move it back to 1.x.
+  # npm rejects a tag that looks like a semver range (such as "1.x").
+  NPM_TAG: latest-1
+
 jobs:
   code-quality:
     runs-on: ubuntu-24.04
@@ -54,6 +60,10 @@ jobs:
         run: |
           cd js
           npm pack
+
+      - name: Check the core-js version in the bundles
+        # core-js older than 3.3.5 turns off V8's RegExp fast paths for the whole page.
+        run: python .github/check_corejs.py js/dist/*.js ipyvue/nbextension/*.js ipyvue/labextension/static/*.js
 
       - name: Check number of files in wheel
         run: |
@@ -153,12 +163,9 @@ jobs:
       - name: Publish the NPM package
         run: |
           cd js
-          echo $PRE_RELEASE
-          if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
-          npm publish --dry-run --tag ${TAG} --access public *.tgz
+          npm publish --dry-run --tag "$NPM_TAG" --access public *.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PRE_RELEASE: ${{ github.event.release.prerelease }}
   release:
     if: startsWith(github.event.ref, 'refs/tags/v')
     needs: [release-dry-run]
@@ -193,9 +200,6 @@ jobs:
       - name: Publish the NPM package
         run: |
           cd js
-          echo $PRE_RELEASE
-          if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
-          npm publish --tag ${TAG} --access public *.tgz
+          npm publish --tag "$NPM_TAG" --access public *.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PRE_RELEASE: ${{ github.event.release.prerelease }}
