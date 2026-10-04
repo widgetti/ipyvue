@@ -61,6 +61,16 @@ jobs:
           cd js
           npm pack
 
+      - name: Check that the SFC compiler is only in the vue-sfc chunk
+        run: |
+          cd ipyvue/nbextension
+          ls -l nodeps.js index.js nodeps-vue-sfc.js index-vue-sfc.js
+          test $(wc -c < nodeps.js) -lt 200000
+          test $(wc -c < index.js) -lt 400000
+          grep -q compileScript nodeps-vue-sfc.js
+          grep -q compileScript index-vue-sfc.js
+          if grep -l compileScript nodeps.js index.js; then echo "compiler-sfc is in the main bundle"; exit 1; fi
+
       - name: Check number of files in wheel
         run: |
           wheel=(dist/*.whl)

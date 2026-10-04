@@ -1,3 +1,4 @@
+import './publicPath';
 import * as Vue from 'vue';
 
 export { Vue };
