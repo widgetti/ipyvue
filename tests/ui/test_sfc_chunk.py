@@ -123,7 +123,7 @@ def ts_chunk_requests(page_session: playwright.sync_api.Page):
 
 
 def test_plain_templates_load_sfc_chunk_once(
-    ipywidgets_runner, page_session: playwright.sync_api.Page
+    ts_chunk_requests, ipywidgets_runner, page_session: playwright.sync_api.Page
 ):
     def kernel_code():
         import ipyvue as vue
@@ -155,6 +155,7 @@ def test_plain_templates_load_sfc_chunk_once(
     )
     assert color == "rgb(255, 0, 0)"
     assert chunk_loads(page_session) == ["vue-sfc"]
+    assert ts_chunk_requests == []
 
 
 def test_script_setup_ts_loads_both_chunks(
@@ -179,27 +180,6 @@ def test_script_setup_ts_loads_both_chunks(
     assert color == "rgb(0, 128, 0)"
     assert chunk_loads(page_session) == ["vue-sfc"]
     assert len(ts_chunk_requests) == 1, ts_chunk_requests
-
-
-def test_plain_template_does_not_load_ts_chunk(
-    ts_chunk_requests, ipywidgets_runner, page_session: playwright.sync_api.Page
-):
-    def kernel_code():
-        import ipyvue as vue
-        import traitlets
-        from IPython.display import display
-        from test_sfc_chunk import PLAIN
-
-        class Plain(vue.VueTemplate):
-            clicks = traitlets.Int(0).tag(sync=True)
-            template = traitlets.Unicode(PLAIN).tag(sync=True)
-
-        display(Plain())
-
-    ipywidgets_runner(kernel_code)
-    page_session.locator("text=Plain 0 from-script").wait_for()
-    assert chunk_loads(page_session) == ["vue-sfc"]
-    assert ts_chunk_requests == []
 
 
 def test_underscore_method_renders(
