@@ -118,6 +118,7 @@ class NPM(Command):
         os.path.join(here, "ipyvue", "nbextension", "extension.js"),
         os.path.join(here, "ipyvue", "nbextension", "index.js"),
         os.path.join(here, "ipyvue", "nbextension", "nodeps-vue-sfc.js"),
+        os.path.join(here, "ipyvue", "nbextension", "nodeps-vue-sfc-ts.js"),
     ]
 
     def initialize_options(self):
