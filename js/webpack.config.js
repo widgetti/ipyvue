@@ -39,7 +39,7 @@ module.exports = [
         plugins,
     },
     {
-        entry: './lib/nbextension.js',
+        entry: './lib/embed.js',
         output: {
             filename: 'index.js',
             chunkFilename: 'index-[name].js',
