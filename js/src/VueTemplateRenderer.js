@@ -8,8 +8,12 @@ import { VueTemplateModel } from './VueTemplateModel';
 import { TemplateModel } from './Template';
 import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVueTemplate";
 
+const templateRefreshVersions = new WeakMap();
+
 export function vueTemplateRender(model, parentView) {
-    return Vue.h(createComponentObject(model, parentView));
+    return Vue.h(createComponentObject(model, parentView), {
+        key: templateRenderKey(model),
+    });
 }
 
 function createComponentObject(model, parentView) {
@@ -74,7 +78,8 @@ export function createModelMixin(model, templateModel, parentView) {
         watch: createWatches(model, parentView),
         created() {
             this.__onTemplateChange = () => {
-                this.$root.$forceUpdate();
+                bumpTemplateRefreshVersion(templateModel);
+                this.viewCtx.refreshRoot();
             };
             templateModel.on('change:template', this.__onTemplateChange);
             templateModel.on('change:source_url', this.__onTemplateChange);
@@ -94,6 +99,18 @@ export function createModelMixin(model, templateModel, parentView) {
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),
     });
+}
+
+function bumpTemplateRefreshVersion(templateModel) {
+    templateRefreshVersions.set(
+        templateModel,
+        (templateRefreshVersions.get(templateModel) || 0) + 1,
+    );
+}
+
+function templateRenderKey(model) {
+    const templateModel = model.get('template') instanceof TemplateModel ? model.get('template') : model;
+    return `${model.model_id}:${templateModel.model_id}:${templateRefreshVersions.get(templateModel) || 0}`;
 }
 
 function createDataMapping(model) {

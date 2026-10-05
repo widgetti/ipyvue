@@ -40,12 +40,9 @@ export async function installModulePlugin(plugin, moduleName, widget_manager) {
             .forEach(([name]) => componentNames.add(name));
     });
 
-    await triggerTemplatesForComponentNames(widget_manager, [...componentNames], { fallbackToAll: true });
-    apps.forEach(app => app._instance && app._instance.proxy && app._instance.proxy.$forceUpdate());
-    setTimeout(() => {
-        triggerTemplatesForComponentNames(widget_manager, [...componentNames], { fallbackToAll: true });
-        apps.forEach(app => app._instance && app._instance.proxy && app._instance.proxy.$forceUpdate());
-    }, 0);
+    await triggerTemplatesForComponentNames(widget_manager, [...componentNames], {
+        fallbackToAll: componentNames.size === 0,
+    });
 }
 
 function escapeRegExp(value) {
@@ -84,6 +81,12 @@ function templateText(model) {
     return null;
 }
 
+function usesEsmModuleInComponents(model, moduleName) {
+    return model instanceof VueTemplateModel
+        && Object.values(model.get('components') || {})
+            .some(spec => spec && spec.esm_module === moduleName);
+}
+
 function triggerTarget(model) {
     if (model instanceof VueTemplateModel && model.get('template') instanceof TemplateModel) {
         return model.get('template');
@@ -91,18 +94,18 @@ function triggerTarget(model) {
     return model;
 }
 
-function usesEsmModuleInComponents(model, moduleName) {
-    return model instanceof VueTemplateModel
-        && Object.values(model.get('components') || {})
-            .some(spec => spec && spec.esm_module === moduleName);
-}
-
 async function allModels(widget_manager) {
     const managers = widget_manager ? [widget_manager] : [...widgetManagers];
     if (!managers.length) {
         return [];
     }
-    const models = await Promise.all(managers.flatMap(manager => Object.values(manager._models)));
+    const modelValues = managers.flatMap((manager) => {
+        if (manager._models instanceof Map) {
+            return [...manager._models.values()];
+        }
+        return Object.values(manager._models);
+    });
+    const models = await Promise.all(modelValues);
     return [...new Set(models)];
 }
 
@@ -135,9 +138,6 @@ export async function triggerTemplatesForModule(widget_manager, moduleName) {
             .map(triggerTarget));
 
     triggerTemplateChanges(matches);
-    setTimeout(() => {
-        triggerTemplateChanges(matches);
-    }, 0);
 }
 
 async function syncComponentModels(app, widget_manager) {
