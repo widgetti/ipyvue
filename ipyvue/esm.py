@@ -1,15 +1,15 @@
 """ES module (ESM) support: ship precompiled bundles instead of .vue source.
 
-Mirrors ipyreact's module mechanism: ``define_module(name, code_or_path)``
-creates a ``Module`` widget whose code is sent to the frontend once, imported
-via es-module-shims, and registered in the import map under ``name``. Vue
-components exported by such a module can then be used as the implementation
-of a VueTemplate (see ``Template.esm_module`` / ``Template.esm_export``),
-bypassing the in-browser SFC compiler entirely.
+Mirrors ipyreact's module mechanism: ``define_module(name, path_or_source)``
+creates a ``Module`` widget whose source is sent to the frontend once,
+imported via es-module-shims, and registered in the import map under ``name``.
+Vue components exported by such a module can then be used as the
+implementation of a VueTemplate (see ``Template.esm_module`` /
+``Template.esm_export``), bypassing the in-browser SFC compiler entirely.
 """
 
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional
 
 from ipywidgets import Widget
 from traitlets import List as ListTrait
@@ -18,6 +18,7 @@ from traitlets import Unicode
 from ._version import semver
 
 _module_names: List[str] = []
+_module_widgets: Dict[str, "Module"] = {}
 
 
 class Module(Widget):
@@ -34,7 +35,12 @@ class Module(Widget):
 
 
 def define_module(
-    name: str, module: Union[str, Path, None] = None, *, code: Optional[str] = None
+    name: str,
+    module: Optional[Path] = None,
+    *,
+    code: Optional[str] = None,
+    url: Optional[str] = None,
+    dependencies: Optional[List[str]] = None,
 ) -> Module:
     """Register an ES module under a name.
 
@@ -43,24 +49,41 @@ def define_module(
     name:
         Import-map name the module will be available under.
     module:
-        A url the module is served from (str, e.g. a bundle in the app's
-        static dir), or a Path to the module source on disk (e.g. a
-        vite/rollup build with ``vue`` marked external).
+        A Path to the module source on disk (e.g. a vite/rollup build with
+        ``vue`` marked external).
     code:
         The module source as a string (alternative to ``module``).
+    url:
+        A URL the module is served from (alternative to ``module`` or
+        ``code``).
+    dependencies:
+        Module names to wait for before loading. Defaults to live modules
+        defined earlier in this process.
     """
-    if (module is None) == (code is None):
-        raise TypeError("pass either module (url or Path) or code")
-    dependencies = [n for n in _module_names if n != name]
+    if isinstance(module, str):
+        raise TypeError("module must be a Path; use url= or code= for strings")
+    if sum(source is not None for source in (module, code, url)) != 1:
+        raise TypeError("pass exactly one of module, code, or url")
+    if dependencies is None:
+        dependencies = [
+            n
+            for n in _module_names
+            if n != name
+            and (widget := _module_widgets.get(n)) is not None
+            and widget.comm is not None
+        ]
+    if module is not None:
+        code = module.read_text(encoding="utf8")
+    widget = Module(
+        code=code or "",
+        url=url,
+        name=name,
+        dependencies=dependencies,
+    )
     if name not in _module_names:
         _module_names.append(name)
-    if code is not None:
-        return Module(code=code, name=name, dependencies=dependencies)
-    if isinstance(module, Path):
-        return Module(
-            code=module.read_text(encoding="utf8"), name=name, dependencies=dependencies
-        )
-    return Module(url=module, name=name, dependencies=dependencies)
+    _module_widgets[name] = widget
+    return widget
 
 
 def get_module_names() -> List[str]:
