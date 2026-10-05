@@ -1,7 +1,6 @@
 import { DOMWidgetView } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import { vueRender } from './VueRenderer';
-import { registerRoot, unregisterRoot } from './templateRefresh';
 
 export function createViewContext(view) {
     return {
@@ -17,10 +16,7 @@ export function createViewContext(view) {
 
 export class VueView extends DOMWidgetView {
     remove() {
-        if (this.vueApp) {
-            unregisterRoot(this.vueApp);
-            this.vueApp.$destroy();
-        }
+        this.vueApp.$destroy();
         return super.remove();
     }
 
@@ -37,7 +33,6 @@ export class VueView extends DOMWidgetView {
                 },
                 render: createElement => vueRender(createElement, this.model, this, {}),
             });
-            registerRoot(this.vueApp);
         });
     }
 }

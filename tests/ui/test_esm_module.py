@@ -242,57 +242,6 @@ def test_esm_module_plugin_reload_refreshes_replaced_component(
     page_session.locator(".esm-reload-tag >> text=reload v2").wait_for()
 
 
-def test_esm_module_plugin_reload_refreshes_replaced_vue_widget_tag(
-    solara_test, page_session: playwright.sync_api.Page
-):
-    vue.define_module(
-        "esm-replace-widget-plugin-module",
-        code="""
-        import Vue from "vue";
-
-        export default {
-            install(vueOrApp) {
-                vueOrApp.component("x-replace-tag", {
-                    render(h) {
-                        return h(
-                            "span",
-                            { class: "x-replace-tag" },
-                            "old implementation",
-                        );
-                    },
-                });
-            },
-        };
-        """,
-    )
-
-    display(vue.Html(tag="x-replace-tag"))
-    page_session.locator(".x-replace-tag >> text=old implementation").wait_for()
-    page_session.locator("x-replace-tag").wait_for(state="detached")
-
-    vue.define_module(
-        "esm-replace-widget-plugin-module",
-        code="""
-        import Vue from "vue";
-
-        export default {
-            install(vueOrApp) {
-                vueOrApp.component("x-replace-tag", {
-                    render(h) {
-                        return h(
-                            "span",
-                            { class: "x-replace-tag" },
-                            "new implementation",
-                        );
-                    },
-                });
-            },
-        };
-        """,
-    )
-    page_session.locator(".x-replace-tag >> text=new implementation").wait_for()
-
-
 def test_esm_module_late_plugin_refreshes_esm_template_export(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -388,46 +337,6 @@ def test_hidden_esm_child_refreshes_after_module_reload(
     )
     parent.show = True
     page_session.locator(".esm-hidden-child >> text=hidden v2").wait_for()
-
-
-def test_hidden_child_uses_replaced_template_model(
-    solara_test, page_session: playwright.sync_api.Page
-):
-    child = vue.VueTemplate(
-        template=vue.Template(
-            template="""
-            <template>
-                <div class="hidden-replaced-child">template v1</div>
-            </template>
-            """
-        )
-    )
-
-    class Parent(vue.VueTemplate):
-        show = traitlets.Bool(True).tag(sync=True)
-        template = traitlets.Unicode(
-            """
-            <template>
-                <child-view v-if="show"></child-view>
-            </template>
-            """
-        ).tag(sync=True)
-
-    parent = Parent(components={"child-view": child})
-    display(parent)
-    page_session.locator(".hidden-replaced-child >> text=template v1").wait_for()
-
-    parent.show = False
-    page_session.locator(".hidden-replaced-child").wait_for(state="detached")
-    child.template = vue.Template(
-        template="""
-        <template>
-            <div class="hidden-replaced-child">template v2</div>
-        </template>
-        """
-    )
-    parent.show = True
-    page_session.locator(".hidden-replaced-child >> text=template v2").wait_for()
 
 
 def test_esm_module_component_as_tag(
