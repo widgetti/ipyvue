@@ -1,8 +1,8 @@
-// Entry point for the unpkg bundle containing custom model definitions.
-//
-// It differs from the notebook bundle in that it does not need to define a
-// dynamic baseURL for the static assets and may load some css that would
-// already be loaded by the notebook otherwise.
+// Entry point for the AMD bundles containing custom model definitions: the
+// classic notebook extension (nbextension/index.js) and the unpkg bundle (dist/index.js).
+
+// Lazy chunks load from the folder of this file, see publicPath.js.
+import './publicPath';
 
 // Export widget models and views, and the npm package version number.
 export * from './index';
