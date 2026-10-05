@@ -9,7 +9,7 @@ bypassing the in-browser SFC compiler entirely.
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from ipywidgets import Widget
 from traitlets import List as ListTrait
@@ -18,6 +18,7 @@ from traitlets import Unicode
 from ._version import semver
 
 _module_names: List[str] = []
+_module_widgets: Dict[str, "Module"] = {}
 
 
 class Module(Widget):
@@ -39,6 +40,7 @@ def define_module(
     *,
     code: Optional[str] = None,
     url: Optional[str] = None,
+    dependencies: Optional[List[str]] = None,
 ) -> Module:
     """Register an ES module under a name.
 
@@ -54,20 +56,41 @@ def define_module(
     url:
         A url the module is served from (e.g. a bundle in the app's
         static dir).
+    dependencies:
+        Module names this module waits for before it loads. When omitted, this
+        defaults to all earlier live modules.
     """
     if sum(x is not None for x in (module, code, url)) != 1:
         raise TypeError("pass exactly one of module (a Path), code or url")
     if module is not None and not isinstance(module, Path):
         raise TypeError("module must be a Path; use url=... or code=... for strings")
-    dependencies = [n for n in _module_names if n != name]
+    if url is not None:
+        widget = Module(
+            url=url, name=name, dependencies=_dependencies(name, dependencies)
+        )
+    else:
+        if code is None:
+            assert module is not None
+            code = module.read_text(encoding="utf8")
+        widget = Module(
+            code=code, name=name, dependencies=_dependencies(name, dependencies)
+        )
     if name not in _module_names:
         _module_names.append(name)
-    if url is not None:
-        return Module(url=url, name=name, dependencies=dependencies)
-    if code is None:
-        assert module is not None
-        code = module.read_text(encoding="utf8")
-    return Module(code=code, name=name, dependencies=dependencies)
+    _module_widgets[name] = widget
+    return widget
+
+
+def _dependencies(name: str, dependencies: Optional[List[str]]) -> List[str]:
+    if dependencies is not None:
+        return dependencies
+    return [
+        module_name
+        for module_name in _module_names
+        if module_name != name
+        and _module_widgets.get(module_name) is not None
+        and _module_widgets[module_name].comm is not None
+    ]
 
 
 def get_module_names() -> List[str]:
