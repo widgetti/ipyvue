@@ -81,7 +81,7 @@ def test_esm_module_late_plugin_refreshes_existing_template(
         ).tag(sync=True)
 
     display(Widget())
-    page_session.locator("esm-late-plugin-hello").wait_for()
+    page_session.locator("esm-late-plugin-hello").wait_for(state="attached")
 
     vue.define_module(
         "esm-late-plugin-module",
@@ -270,7 +270,7 @@ def test_esm_module_code_change_resolves_existing_waiter(
 def test_esm_template_module_code_change_refreshes_mounted_view(
     solara_test, page_session: playwright.sync_api.Page
 ):
-    module = vue.define_module(
+    vue.define_module(
         "esm-refresh-module",
         code="""
         export const Hello = {
@@ -289,11 +289,15 @@ def test_esm_template_module_code_change_refreshes_mounted_view(
     display(Widget())
     page_session.locator(".esm-refresh >> text=v1 hot").wait_for()
 
-    module.code = """
+    # redefine instead of setting .code: solara's define_module returns None
+    vue.define_module(
+        "esm-refresh-module",
+        code="""
         export const Hello = {
             template: `<div class="esm-refresh">v2 {{ label }}</div>`,
         };
-    """
+        """,
+    )
     page_session.locator(".esm-refresh >> text=v2 hot").wait_for()
 
 
