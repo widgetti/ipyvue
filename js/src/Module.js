@@ -6,7 +6,7 @@ import {
     provideModule,
     requestModule,
 } from './esmVueTemplate';
-import { installModulePlugin } from './VueComponentModel';
+import { installModulePlugin, triggerTemplatesForModule } from './VueComponentModel';
 
 const moduleGenerations = new Map();
 
@@ -39,6 +39,7 @@ export class ModuleModel extends WidgetModel {
 
     initialize(attributes, options) {
         super.initialize(attributes, options);
+        this.widget_manager = options && options.widget_manager;
         invalidateModule(this.get('name'));
         this.load();
         this.on('change:code change:url', () => {
@@ -64,10 +65,14 @@ export class ModuleModel extends WidgetModel {
             if (!isCurrent() || module === undefined) {
                 return;
             }
-            if (module.default && typeof module.default.install === 'function') {
-                installModulePlugin(module.default);
+            const isPlugin = module.default && typeof module.default.install === 'function';
+            if (isPlugin) {
+                await installModulePlugin(module.default, name, this.widget_manager);
             }
-            provideModule(name, module);
+            const replacedModule = provideModule(name, module);
+            if (replacedModule && !isPlugin) {
+                await triggerTemplatesForModule(this.widget_manager, name);
+            }
         } catch (e) {
             if (!isCurrent()) {
                 return;

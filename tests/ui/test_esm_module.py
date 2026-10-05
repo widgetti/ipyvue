@@ -175,6 +175,165 @@ def test_esm_module_plugin_registers_components(
 
 
 @pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
+def test_late_esm_module_plugin_rerenders_existing_templates(
+    ipywidgets_runner,
+    page_session: playwright.sync_api.Page,
+):
+    def kernel_code():
+        import traitlets
+        import ipyvue
+        from ipywidgets import widget_serialization
+        from IPython.display import display
+
+        ipyvue.define_module(
+            "esm-late-plugin-module",
+            code="""
+            import { h } from "vue";
+
+            await new Promise(resolve => { window.__releaseLatePlugin = resolve; });
+
+            const LatePluginCard = {
+                render() {
+                    return h("div", { class: "esm-late-plugin" }, "late plugin loaded");
+                },
+            };
+
+            export default {
+                install(app) {
+                    app.component("LatePluginCard", LatePluginCard);
+                },
+            };
+            """,
+        )
+
+        class Widget(ipyvue.VueTemplate):
+            template = traitlets.Any().tag(sync=True, **widget_serialization)
+
+            @traitlets.default("template")
+            def _template(self):
+                return ipyvue.Template(
+                    template="""
+                    <template>
+                        <late-plugin-card></late-plugin-card>
+                    </template>
+                    """
+                )
+
+        display(Widget())
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator("late-plugin-card").wait_for(state="attached")
+    page_session.wait_for_function("window.__releaseLatePlugin !== undefined")
+    page_session.evaluate("window.__releaseLatePlugin()")
+    page_session.locator(".esm-late-plugin >> text=late plugin loaded").wait_for()
+
+
+@pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
+def test_esm_module_code_change_rerenders_mounted_template(
+    ipywidgets_runner,
+    page_session: playwright.sync_api.Page,
+):
+    holder = {}
+
+    def kernel_code():
+        import traitlets
+        import ipyvue
+        from ipywidgets import widget_serialization
+        from IPython.display import display
+
+        module = ipyvue.define_module(
+            "esm-hot-module",
+            code="""
+            import { h } from "vue";
+
+            export const Label = {
+                render() {
+                    return h("div", { class: "esm-hot" }, "v1");
+                },
+            };
+            """,
+        )
+        holder["module"] = module
+
+        class Widget(ipyvue.VueTemplate):
+            template = traitlets.Any().tag(sync=True, **widget_serialization)
+
+            @traitlets.default("template")
+            def _template(self):
+                return ipyvue.Template(esm_module="esm-hot-module", esm_export="Label")
+
+        display(Widget())
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator(".esm-hot >> text=v1").wait_for()
+    holder[
+        "module"
+    ].code = """
+    import { h } from "vue";
+
+    export const Label = {
+        render() {
+            return h("div", { class: "esm-hot" }, "v2");
+        },
+    };
+    """
+    page_session.locator(".esm-hot >> text=v2").wait_for()
+
+
+@pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
+def test_esm_export_change_rerenders_mounted_template(
+    ipywidgets_runner,
+    page_session: playwright.sync_api.Page,
+):
+    holder = {}
+
+    def kernel_code():
+        import traitlets
+        import ipyvue
+        from ipywidgets import widget_serialization
+        from IPython.display import display
+
+        ipyvue.define_module(
+            "esm-export-switch-module",
+            code="""
+            import { h } from "vue";
+
+            export const One = {
+                render() {
+                    return h("div", { class: "esm-export" }, "one");
+                },
+            };
+
+            export const Two = {
+                render() {
+                    return h("div", { class: "esm-export" }, "two");
+                },
+            };
+            """,
+        )
+
+        class Widget(ipyvue.VueTemplate):
+            template = traitlets.Any().tag(sync=True, **widget_serialization)
+
+            @traitlets.default("template")
+            def _template(self):
+                return ipyvue.Template(
+                    esm_module="esm-export-switch-module",
+                    esm_export="One",
+                )
+
+        widget = Widget()
+        holder["template"] = widget.template
+
+        display(widget)
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator(".esm-export >> text=one").wait_for()
+    holder["template"].esm_export = "Two"
+    page_session.locator(".esm-export >> text=two").wait_for()
+
+
+@pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
 def test_esm_module_code_change_while_consumer_waits(
     ipywidgets_runner,
     page_session: playwright.sync_api.Page,

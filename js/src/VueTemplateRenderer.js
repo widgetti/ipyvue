@@ -78,12 +78,16 @@ export function createModelMixin(model, templateModel, parentView) {
             };
             templateModel.on('change:template', this.__onTemplateChange);
             templateModel.on('change:source_url', this.__onTemplateChange);
+            templateModel.on('change:esm_module', this.__onTemplateChange);
+            templateModel.on('change:esm_export', this.__onTemplateChange);
             addModelListeners(model, this);
         },
         beforeUnmount() {
             if (this.__onTemplateChange) {
                 templateModel.off('change:template', this.__onTemplateChange);
                 templateModel.off('change:source_url', this.__onTemplateChange);
+                templateModel.off('change:esm_module', this.__onTemplateChange);
+                templateModel.off('change:esm_export', this.__onTemplateChange);
                 this.__onTemplateChange = null;
             }
         },

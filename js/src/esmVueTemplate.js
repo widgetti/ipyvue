@@ -179,14 +179,18 @@ export async function addModule(name, module) {
  * modules by name; consumers await them, so load order does not matter. */
 const _providedModules = new Map();
 const _moduleResolvers = new Map();
+const _providedModuleNames = new Set();
 
 export function provideModule(name, module) {
     const resolver = _moduleResolvers.get(name);
+    const replacedModule = _providedModuleNames.has(name);
     _providedModules.set(name, Promise.resolve(module));
+    _providedModuleNames.add(name);
     if (resolver) {
         resolver.resolve(module);
         _moduleResolvers.delete(name);
     }
+    return replacedModule;
 }
 
 export function requestModule(name) {
