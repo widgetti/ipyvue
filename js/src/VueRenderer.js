@@ -1,6 +1,6 @@
 /* eslint camelcase: ['error', {allow: ['v_model']}] */
 import * as base from '@jupyter-widgets/base';
-import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
+import { templateRenderKey, vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import * as Vue from 'vue';
@@ -312,11 +312,12 @@ function renderChildren(children, childCache, parentView, slotScopes) {
         if (typeof (child) === 'string') {
             return child;
         }
-        if (childCache[child.cid]) {
-            return childCache[child.cid];
+        const renderKey = child instanceof VueTemplateModel ? templateRenderKey(child) : undefined;
+        if (childCache[child.cid] && childCache[child.cid].renderKey === renderKey) {
+            return childCache[child.cid].vm;
         }
         const vm = vueRender(child, parentView, slotScopes);
-        childCache[child.cid] = vm; // eslint-disable-line no-param-reassign
+        childCache[child.cid] = { renderKey, vm }; // eslint-disable-line no-param-reassign
         return vm;
     });
 

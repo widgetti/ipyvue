@@ -130,10 +130,10 @@ function pruneTemplateOwners(templateModel) {
 }
 
 function forceUpdateOwner(owner) {
-    if (typeof owner.update === 'function') {
-        owner.update();
-    } else if (owner.proxy && typeof owner.proxy.$forceUpdate === 'function') {
+    if (owner.proxy && typeof owner.proxy.$forceUpdate === 'function') {
         owner.proxy.$forceUpdate();
+    } else if (typeof owner.update === 'function') {
+        owner.update();
     }
 }
 
@@ -145,7 +145,6 @@ function refreshTemplateOwners(templateModel, fallback) {
         return;
     }
     owners.forEach(forceUpdateOwner);
-    fallback();
 }
 
 function bumpTemplateRefreshVersion(templateModel) {
@@ -159,7 +158,7 @@ function templateRefreshTarget(model) {
     return model.get('template') instanceof TemplateModel ? model.get('template') : model;
 }
 
-function templateRenderKey(model) {
+export function templateRenderKey(model) {
     const templateModel = templateRefreshTarget(model);
     return `${model.model_id}:${templateModel.model_id}:${templateRefreshVersions.get(templateModel) || 0}`;
 }
