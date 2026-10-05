@@ -6,6 +6,22 @@ if sys.version_info < (3, 7):
 
 import playwright.sync_api
 
+import ipyvue as vue
+
+
+@pytest.fixture(autouse=True)
+def clean_module_registry():
+    names = list(vue.esm._module_names)
+    widgets = dict(getattr(vue.esm, "_module_widgets", {}))
+    vue.esm._module_names.clear()
+    if hasattr(vue.esm, "_module_widgets"):
+        vue.esm._module_widgets.clear()
+    yield
+    vue.esm._module_names[:] = names
+    if hasattr(vue.esm, "_module_widgets"):
+        vue.esm._module_widgets.clear()
+        vue.esm._module_widgets.update(widgets)
+
 
 @pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
 def test_esm_module_component(
@@ -156,3 +172,54 @@ def test_esm_module_plugin_registers_components(
 
     ipywidgets_runner(kernel_code)
     page_session.locator(".esm-plugin-hello >> text=hello from python").wait_for()
+
+
+@pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
+def test_esm_module_code_change_while_consumer_waits(
+    ipywidgets_runner,
+    page_session: playwright.sync_api.Page,
+):
+    def kernel_code():
+        import traitlets
+        import ipyvue
+        from ipywidgets import widget_serialization
+        from IPython.display import display
+
+        module = ipyvue.define_module(
+            "esm-replaced-module",
+            code="""
+            import { h } from "vue";
+
+            export const Label = {
+                render() {
+                    return h("div", { class: "esm-replaced" }, "old code");
+                },
+            };
+            """,
+            dependencies=["pending-gate-module"],
+        )
+
+        class Widget(ipyvue.VueTemplate):
+            template = traitlets.Any().tag(sync=True, **widget_serialization)
+
+            @traitlets.default("template")
+            def _template(self):
+                return ipyvue.Template(
+                    esm_module="esm-replaced-module",
+                    esm_export="Label",
+                )
+
+        display(Widget())
+        module.dependencies = []
+        module.code = """
+        import { h } from "vue";
+
+        export const Label = {
+            render() {
+                return h("div", { class: "esm-replaced" }, "new code");
+            },
+        };
+        """
+
+    ipywidgets_runner(kernel_code)
+    page_session.locator(".esm-replaced >> text=new code").wait_for()

@@ -177,37 +177,44 @@ export async function addModule(name, module) {
 
 /* Named-module registry (mirrors ipyreact): ModuleModel widgets provide
  * modules by name; consumers await them, so load order does not matter. */
-const _providedModules = {};
-const _moduleResolvers = {};
+const _providedModules = new Map();
+const _moduleResolvers = new Map();
 
 export function provideModule(name, module) {
-    if (_moduleResolvers[name]) {
-        _moduleResolvers[name].resolve(module);
-        delete _moduleResolvers[name];
-    } else {
-        _providedModules[name] = Promise.resolve(module);
+    const resolver = _moduleResolvers.get(name);
+    _providedModules.set(name, Promise.resolve(module));
+    if (resolver) {
+        resolver.resolve(module);
+        _moduleResolvers.delete(name);
     }
 }
 
 export function requestModule(name) {
-    if (!_providedModules[name]) {
-        _providedModules[name] = new Promise((resolve, reject) => {
-            _moduleResolvers[name] = { resolve, reject };
-        });
+    if (!_providedModules.has(name)) {
+        _providedModules.set(name, new Promise((resolve, reject) => {
+            _moduleResolvers.set(name, { resolve, reject });
+        }));
     }
-    return _providedModules[name];
+    return _providedModules.get(name);
 }
 
 export function invalidateModule(name) {
-    /* next requestModule waits for a fresh provideModule (hot reload) */
-    delete _providedModules[name];
-    delete _moduleResolvers[name];
+    /* Keep a pending waiter alive so the next provideModule resolves it. */
+    if (!_moduleResolvers.has(name)) {
+        _providedModules.delete(name);
+    }
 }
 
-export async function loadModuleFromUrl(url, name) {
+export async function loadModuleFromUrl(url, name, isCurrent = () => true) {
     await init();
+    if (!isCurrent()) {
+        return undefined;
+    }
     addVueImportMap();
     const module = await importShim(url);
+    if (!isCurrent()) {
+        return undefined;
+    }
     try {
         importShim.addImportMap({ imports: { [name]: url } });
     } catch (e) {
@@ -216,8 +223,11 @@ export async function loadModuleFromUrl(url, name) {
     return module;
 }
 
-export async function loadModuleFromCode(code, name) {
+export async function loadModuleFromCode(code, name, isCurrent = () => true) {
     await init();
+    if (!isCurrent()) {
+        return undefined;
+    }
     /* another library (e.g. ipyreact) may have replaced the importShim
      * global since init; re-add the vue mapping so this import resolves
      * against the shim that will actually run it (same refresh toModule
@@ -225,6 +235,9 @@ export async function loadModuleFromCode(code, name) {
     addVueImportMap();
     const url = toModuleUrl(withSourceURL(code, `ipyvue-module:///${name}.mjs`));
     const module = await importShim(url);
+    if (!isCurrent()) {
+        return undefined;
+    }
     /* Also expose under the name for inter-module imports. Import maps
      * cannot remap an already-resolved specifier (hot reload in the same
      * page); the named-module registry is the source of truth, so a failed
@@ -249,7 +262,6 @@ async function resolveModuleExport(moduleName, exportName) {
     }
     return component;
 }
-
 /* Component whose implementation comes from a precompiled ES module instead
  * of an in-browser compiled SFC. Mirrors compileSfc's output shape: the
  * component's own options ride as mixins[0] so the ipyvue model mixin
