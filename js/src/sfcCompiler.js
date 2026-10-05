@@ -1,6 +1,9 @@
 /* The vue-sfc chunk: @vue/compiler-sfc and the template compile code.
  * esmVueTemplate.js loads it when the first template compiles.
  * sucrase is in its own chunk, vue-sfc-ts, which loads at the first <script lang="ts">.
+ * package.json sets "sucrase": false in jupyterlab.sharedPackages: as a shared module in
+ * the labextension, one failed download would fail every later TypeScript template
+ * until a reload (webpack keeps a failed shared install). A normal chunk retries.
  */
 import { parse, compileScript, compileStyle, compileTemplate } from 'vue/compiler-sfc'
 import { init, toModule } from './esmVueTemplate';

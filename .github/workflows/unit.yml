@@ -171,6 +171,7 @@ jobs:
           pip install "jupyter_server<2"
           # ipyvuetify's pin drags in a released ipyvue; put the branch wheel back
           pip install --force-reinstall --no-deps ${wheel}
+          ls -l "$(python -c 'import sys; print(sys.prefix)')/share/jupyter/nbextensions/jupyter-vue/nodeps-vue-sfc.js"
 
       - name: Install playwright browsers
         run: playwright install chromium

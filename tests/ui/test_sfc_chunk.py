@@ -52,6 +52,16 @@ const msg = ref<string>("setup-" + (1 as number));
 </style>
 """
 
+SETUP_TS_2 = """
+<template>
+    <div class="setup-tpl-2">{{ msg }}</div>
+</template>
+<script setup lang="ts">
+import { ref } from "vue";
+const msg = ref<string>("second-" + (2 as number));
+</script>
+"""
+
 UNDERSCORE = """
 <template>
     <div class="underscore-tpl">{{ _label() }}</div>
@@ -68,6 +78,7 @@ ADD_BUTTON = "Add a template"
 CHUNK_URL = re.compile(r"vue-sfc[^/]*\.js")
 TS_CHUNK_URL = re.compile(r"vue-sfc-ts[^/]*\.js")
 CHUNK_SCRIPT_GONE = "!document.querySelector('script[src*=\"vue-sfc\"]')"
+TS_CHUNK_SCRIPT_GONE = "!document.querySelector('script[src*=\"vue-sfc-ts\"]')"
 
 RECORD_CHUNK_LOADS = """(() => {
     if (!window.__ipyvueChunkLoads) {
@@ -262,3 +273,59 @@ def test_template_after_failed_chunk_load(
         assert chunk_loads(page_session) == ["vue-sfc", "vue-sfc"]
     finally:
         page_session.unroute(CHUNK_URL, fail_once)
+
+
+def test_ts_template_after_failed_ts_chunk_load(
+    ts_chunk_requests, ipywidgets_runner, page_session: playwright.sync_api.Page
+):
+    # the first vue-sfc-ts request fails, so the first TypeScript template does not
+    # render; a later TypeScript template loads the chunk again. In JupyterLab this
+    # needs sucrase to be a normal chunk, not a shared module (see js/package.json).
+    failed = []
+
+    def fail_once(route):
+        if not failed:
+            failed.append(route.request.url)
+            route.abort()
+        else:
+            route.continue_()
+
+    def kernel_code():
+        import ipyvue as vue
+        import ipywidgets as widgets
+        import traitlets
+        from IPython.display import display
+        from test_sfc_chunk import ADD_BUTTON, SETUP_TS, SETUP_TS_2
+
+        class Setup(vue.VueTemplate):
+            template = traitlets.Unicode(SETUP_TS).tag(sync=True)
+
+        class Setup2(vue.VueTemplate):
+            template = traitlets.Unicode(SETUP_TS_2).tag(sync=True)
+
+        box = widgets.VBox([Setup()])
+        button = widgets.Button(description=ADD_BUTTON)
+
+        def add(_button):
+            box.children = box.children + (Setup2(),)
+
+        button.on_click(add)
+        display(widgets.VBox([button, box]))
+
+    page_session.route(TS_CHUNK_URL, fail_once)
+    try:
+        ipywidgets_runner(kernel_code)
+        add_button = page_session.get_by_role("button", name=ADD_BUTTON)
+        add_button.wait_for()
+        for _ in range(100):
+            # webpack removes the script tag of a chunk that failed to load
+            if failed and page_session.evaluate(TS_CHUNK_SCRIPT_GONE):
+                break
+            page_session.wait_for_timeout(100)
+        assert failed, "the page did not request the vue-sfc-ts chunk"
+        add_button.click()
+        page_session.locator("text=second-2").wait_for()
+        assert page_session.locator(".setup-tpl").count() == 0
+        assert len(ts_chunk_requests) == 2, ts_chunk_requests
+    finally:
+        page_session.unroute(TS_CHUNK_URL, fail_once)
