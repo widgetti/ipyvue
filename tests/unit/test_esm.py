@@ -7,10 +7,14 @@ import ipyvue.esm as esm
 def clean_module_registry():
     names = list(esm._module_names)
     widgets = dict(getattr(esm, "_module_widgets", {}))
+    dependencies = dict(esm._module_dependencies)
     esm._module_names.clear()
+    esm._module_dependencies.clear()
     if hasattr(esm, "_module_widgets"):
         esm._module_widgets.clear()
     yield
+    esm._module_dependencies.clear()
+    esm._module_dependencies.update(dependencies)
     esm._module_names[:] = names
     if hasattr(esm, "_module_widgets"):
         esm._module_widgets.clear()
@@ -63,3 +67,14 @@ def test_define_module_redefine_updates_live_widget_without_cycle():
     assert a2 is a and b2 is b
     assert a.dependencies == [] and a.code == "export default 3;"
     assert b.dependencies == ["a"] and b.url and b.code == ""
+
+
+def test_redefine_closed_module_keeps_first_dependencies():
+    a = esm.define_module("a", code="export default 1;")
+    b = esm.define_module("b", code="export default 2;")
+    a.close()
+
+    a2 = esm.define_module("a", code="export default 3;")
+
+    assert a2 is not a
+    assert a2.dependencies == [] and b.dependencies == ["a"]

@@ -19,6 +19,9 @@ from ._version import semver
 
 _module_names: List[str] = []
 _module_widgets: Dict[str, "Module"] = {}
+# like solara, a name keeps the dependencies it was first defined with, so a
+# redefinition cannot pick up later modules and form a cycle (a->[b], b->[a])
+_module_dependencies: Dict[str, List[str]] = {}
 
 
 class Module(Widget):
@@ -57,8 +60,9 @@ def define_module(
         A URL the module is served from (alternative to ``module`` or
         ``code``).
     dependencies:
-        Module names to wait for before loading. Defaults to live modules
-        defined earlier in this process.
+        Module names to wait for before loading. Defaults to the
+        dependencies of the first definition of this name, else to the live
+        modules defined earlier in this process.
     """
     if isinstance(module, str):
         raise TypeError("module must be a Path; use url= or code= for strings")
@@ -66,6 +70,8 @@ def define_module(
         raise TypeError("pass exactly one of module, code, or url")
     if module is not None:
         code = module.read_text(encoding="utf8")
+    if dependencies is None:
+        dependencies = _module_dependencies.get(name)
     existing = _module_widgets.get(name)
     if existing is not None and existing.comm is not None:
         # redefining updates the live widget, like solara does: a second
@@ -93,6 +99,7 @@ def define_module(
     )
     if name not in _module_names:
         _module_names.append(name)
+    _module_dependencies.setdefault(name, dependencies)
     _module_widgets[name] = widget
     return widget
 
