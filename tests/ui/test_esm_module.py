@@ -1100,3 +1100,111 @@ def test_esm_module_as_template_implementation(
     # python -> template still flows down
     widget.count = 42
     page_session.locator("text=from python 42").wait_for()
+
+
+def test_esm_module_late_plugin_refreshes_vue_widget_tag(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    display(vue.Html(tag="esm-late-widget-tag", children=["widget"]))
+    page_session.locator("esm-late-widget-tag").wait_for(state="attached")
+
+    vue.define_module(
+        "esm-late-widget-tag-module",
+        code="""
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-late-widget-tag", {
+                    render(h) {
+                        return h(
+                            "div",
+                            { class: "esm-late-widget-tag" },
+                            ["plugin ", this.$slots.default],
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.locator(".esm-late-widget-tag >> text=plugin widget").wait_for()
+
+
+def test_esm_vue_template_component_keeps_ref_slots_and_events(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-ref-module",
+        code="""
+        export const Child = {
+            data() {
+                return { greeting: "" };
+            },
+            methods: {
+                greet() {
+                    this.greeting = "greeted";
+                    this.$emit("greeted", "heard");
+                },
+            },
+            template: `
+                <div>
+                    <span class="esm-ref-slot"><slot></slot></span>
+                    <span class="esm-ref-slots">
+                        {{ $slots.default ? "has" : "no" }} slot
+                    </span>
+                    <span class="esm-ref-greeting">{{ greeting }}</span>
+                </div>
+            `,
+        };
+        """,
+    )
+    child = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-ref-module", esm_export="Child")
+    )
+
+    class Parent(vue.VueTemplate):
+        heard = traitlets.Unicode("").tag(sync=True)
+        template = traitlets.Unicode(
+            """
+            <template>
+                <div>
+                    <esm-child ref="c" @greeted="heard = $event">slot text</esm-child>
+                    <button class="esm-ref-call" @click="$refs.c.greet()">call</button>
+                </div>
+            </template>
+            """
+        ).tag(sync=True)
+
+    parent = Parent(components={"esm-child": child})
+    display(parent)
+    page_session.locator(".esm-ref-slot >> text=slot text").wait_for()
+    page_session.locator(".esm-ref-slots >> text=has slot").wait_for()
+
+    page_session.locator(".esm-ref-call").click()
+    page_session.locator(".esm-ref-greeting >> text=greeted").wait_for()
+    page_session.wait_for_timeout(300)
+    assert parent.heard == "heard"
+
+
+def test_mounted_template_switches_to_and_from_esm_module(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-toggle-module",
+        code="""
+        export const Toggled = {
+            template: `<div class="esm-toggle-esm">from esm</div>`,
+        };
+        """,
+    )
+    template = vue.Template(
+        template="<div class='esm-toggle-compiled'>compiled</div>",
+        esm_export="Toggled",
+    )
+    display(vue.VueTemplate(template=template))
+    page_session.locator(".esm-toggle-compiled >> text=compiled").wait_for()
+
+    template.esm_module = "esm-toggle-module"
+    page_session.locator(".esm-toggle-esm >> text=from esm").wait_for()
+
+    template.esm_module = None
+    page_session.locator(".esm-toggle-compiled >> text=compiled").wait_for()

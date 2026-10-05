@@ -77,17 +77,29 @@ function scopeStyleElement(styleElt, scopeId) {
     }
 }
 
-/* Mounted template components: a module plugin can register a tag after a
- * template rendered it as an unknown element, and vue2 only resolves tags
- * on render. */
-const templateInstances = new Set();
+/* Mounted template and widget components: a module plugin can register a
+ * tag after one of them rendered it as an unknown element, and vue2 only
+ * resolves tags on render. */
+const tagConsumers = new Set();
+
+export const rerenderedByPlugins = {
+    created() {
+        tagConsumers.add(this);
+    },
+    destroyed() {
+        tagConsumers.delete(this);
+    },
+};
 
 export function rerenderTemplates() {
-    templateInstances.forEach(vm => vm.$forceUpdate());
+    tagConsumers.forEach(vm => vm.$forceUpdate());
 }
 
 export function vueTemplateRender(createElement, model, parentView) {
-    return createElement(createComponentObject(model, parentView));
+    const component = createComponentObject(model, parentView);
+    /* a functional template holder makes its parent read the module: wrap
+     * it, so a parent that caches its child vnodes cannot hide a reload */
+    return createElement(component.functional ? { render: h => h(component) } : component);
 }
 
 function createComponentObject(model, parentView) {
@@ -102,11 +114,13 @@ function createComponentObject(model, parentView) {
         return createObjectForNestedModel(model, parentView);
     }
 
-    const isTemplateModel = model.get('template') instanceof TemplateModel;
-    const templateModel = isTemplateModel ? model.get('template') : model;
-    if (isTemplateModel && templateModel.get('esm_module')) {
-        return createEsmTemplateComponent(model, templateModel, parentView);
+    if (model.get('template') instanceof TemplateModel) {
+        return createTemplateHolder(model, model.get('template'), parentView);
     }
+    return createCompiledComponentObject(model, model, parentView);
+}
+
+function createCompiledComponentObject(model, templateModel, parentView) {
     const template = templateModel.get('template');
     const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
     const vuefile = readVueFile(template, sourceCodeFile);
@@ -177,6 +191,7 @@ function createComponentObject(model, parentView) {
 
     return {
         inject: ['viewCtx'],
+        mixins: [rerenderedByPlugins],
         data() {
             // data that is only used in the template, and not synced with the backend/model
             const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
@@ -190,7 +205,6 @@ function createComponentObject(model, parentView) {
                 this.$root.$forceUpdate();
             };
             templateModel.on('change:template', this.__onTemplateChange);
-            templateInstances.add(this);
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -222,56 +236,61 @@ function createComponentObject(model, parentView) {
         },
         beforeDestroy() {
             templateModel.off('change:template', this.__onTemplateChange);
+            model.off(null, null, this);
             callVueFn('beforeDestroy', this);
         },
         destroyed() {
-            templateInstances.delete(this);
             callVueFn('destroyed', this);
         },
     };
 }
 
-/* Precompiled ES module export as the component implementation (see
- * ipyvue.esm.define_module and Template.esm_module). The returned component
- * holds the export and rebuilds it when the module is provided again or the
- * template, components or events change; re-rendering only itself, it
- * replaces this widget wherever it is mounted and leaves its siblings. */
-function createEsmTemplateComponent(model, templateModel, parentView) {
-    const templateEvents = 'change:esm_module change:esm_export';
-    const modelEvents = 'change:components change:events';
+/* A Template's implementation, picked per render: the precompiled ES module
+ * export (see ipyvue.esm.define_module and Template.esm_module) or the
+ * compiled template. Functional, so refs, events and slots reach the
+ * implementation; the parent render reads the module and the model's
+ * version, so it renders the new implementation after a change. */
+function createTemplateHolder(model, templateModel, parentView) {
+    let compiled = null;
+    let esm = {};
     return {
-        data() {
-            return { version: 0 };
-        },
-        created() {
-            this.__onChange = () => {
-                this.version += 1;
-            };
-            templateModel.on(templateEvents, this.__onChange);
-            model.on(modelEvents, this.__onChange);
-        },
-        beforeDestroy() {
-            templateModel.off(templateEvents, this.__onChange);
-            model.off(modelEvents, this.__onChange);
-        },
-        computed: {
-            component() {
-                this.version; // eslint-disable-line no-unused-expressions
-                const component = getModuleExport(templateModel.get('esm_module'), templateModel.get('esm_export'));
-                return component && createEsmTemplateObject(model, component, parentView);
-            },
-        },
-        render(h) {
-            if (!this.component) {
+        functional: true,
+        render(h, { data, children }) {
+            const version = implementationVersion(model, templateModel);
+            const moduleName = templateModel.get('esm_module');
+            if (!moduleName) {
+                compiled = compiled
+                    || createCompiledComponentObject(model, templateModel, parentView);
+                return h(compiled, data, children);
+            }
+            const component = getModuleExport(moduleName, templateModel.get('esm_export'));
+            if (!component) {
                 return h();
             }
-            return h(this.component, {
-                attrs: this.$attrs,
-                on: this.$listeners,
-                scopedSlots: this.$scopedSlots,
-            });
+            if (esm.component !== component || esm.version !== version) {
+                const object = createEsmTemplateObject(model, component, parentView);
+                esm = { component, version, object };
+            }
+            return h(esm.object, data, children);
         },
     };
+}
+
+/* One reactive version per model, bumped when its ES module implementation
+ * inputs change; per model, so listeners do not pile up per render. */
+const implementationVersions = new WeakMap();
+
+function implementationVersion(model, templateModel) {
+    if (!implementationVersions.has(model)) {
+        const cell = Vue.observable({ version: 0 });
+        const bump = () => {
+            cell.version += 1;
+        };
+        model.listenTo(templateModel, 'change:esm_module change:esm_export', bump);
+        model.on('change:components change:events', bump);
+        implementationVersions.set(model, cell);
+    }
+    return implementationVersions.get(model).version;
 }
 
 /* The export's options ride as mixins[0] under the model mixin: vue merges
@@ -286,15 +305,15 @@ function createEsmTemplateObject(model, component, parentView) {
     const { props, ...withoutProps } = component;
     const modelMixin = {
         inject: ['viewCtx'],
+        mixins: [rerenderedByPlugins],
         data() {
             return createDataMapping(model);
         },
         created() {
-            templateInstances.add(this);
             addModelListeners(model, this);
         },
-        destroyed() {
-            templateInstances.delete(this);
+        beforeDestroy() {
+            model.off(null, null, this);
         },
         watch: createWatches(model, parentView, null),
         methods: createMethods(model, parentView),
@@ -339,7 +358,7 @@ function addModelListeners(model, vueModel) {
                 return;
             }
             vueModel[prop] = _.cloneDeep(model.get(prop));
-        }));
+        }, vueModel));
     model.on('msg:custom', (content, buffers) => {
         if (!content['method']) {
             return;
@@ -353,7 +372,7 @@ function addModelListeners(model, vueModel) {
             args_ = []
         }
         vueModel[jupyter_method](...args_, buffers);
-    });
+    }, vueModel);
 }
 
 /* vue allows function, {handler, ...}, method-name string and array watchers */
