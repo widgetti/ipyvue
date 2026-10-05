@@ -13,20 +13,37 @@ import ipyvue as vue
 import ipyvue.esm as esm
 
 
+def _module_registries():
+    # define_module records modules process-wide (for dependency ordering),
+    # and so does solara's replacement of it; every test gets a fresh page,
+    # so a module left over from an earlier test (e.g. one that never
+    # finishes loading) must not become a dependency of later modules
+    registries = [esm._module_names, esm._module_widgets]
+    try:
+        import solara.server.esm_vue as solara_esm_vue
+    except ImportError:
+        pass
+    else:
+        registries += [
+            solara_esm_vue._modules,
+            solara_esm_vue._modules_added_per_kernel,
+        ]
+    return registries
+
+
 @pytest.fixture(autouse=True)
 def clean_module_registry():
-    # define_module records module names process-wide (for dependency
-    # ordering); tests each get a fresh page/kernel, so reset it
-    names = list(esm._module_names)
-    widgets = dict(getattr(esm, "_module_widgets", {}))
-    esm._module_names.clear()
-    if hasattr(esm, "_module_widgets"):
-        esm._module_widgets.clear()
+    registries = _module_registries()
+    saved = [registry.copy() for registry in registries]
+    for registry in registries:
+        registry.clear()
     yield
-    esm._module_names[:] = names
-    if hasattr(esm, "_module_widgets"):
-        esm._module_widgets.clear()
-        esm._module_widgets.update(widgets)
+    for registry, copy in zip(registries, saved):
+        registry.clear()
+        if isinstance(registry, list):
+            registry.extend(copy)
+        else:
+            registry.update(copy)
 
 
 def test_esm_module_plugin_registers_components(
