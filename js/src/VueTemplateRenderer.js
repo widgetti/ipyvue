@@ -114,13 +114,11 @@ function createComponentObject(model, parentView) {
         return createObjectForNestedModel(model, parentView);
     }
 
-    if (model.get('template') instanceof TemplateModel) {
-        return createTemplateHolder(model, model.get('template'), parentView);
+    const isTemplateModel = model.get('template') instanceof TemplateModel;
+    const templateModel = isTemplateModel ? model.get('template') : model;
+    if (isTemplateModel && templateModel.get('esm_module')) {
+        return createTemplateHolder(model, templateModel, parentView);
     }
-    return createCompiledComponentObject(model, model, parentView);
-}
-
-function createCompiledComponentObject(model, templateModel, parentView) {
     const template = templateModel.get('template');
     const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
     const vuefile = readVueFile(template, sourceCodeFile);
@@ -204,7 +202,8 @@ function createCompiledComponentObject(model, templateModel, parentView) {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
-            templateModel.on('change:template', this.__onTemplateChange);
+            /* a new esm_module re-renders through the ES module holder */
+            templateModel.on('change:template change:esm_module', this.__onTemplateChange);
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -235,7 +234,7 @@ function createCompiledComponentObject(model, templateModel, parentView) {
             callVueFn('updated', this);
         },
         beforeDestroy() {
-            templateModel.off('change:template', this.__onTemplateChange);
+            templateModel.off('change:template change:esm_module', this.__onTemplateChange);
             model.off(null, null, this);
             callVueFn('beforeDestroy', this);
         },
@@ -245,13 +244,11 @@ function createCompiledComponentObject(model, templateModel, parentView) {
     };
 }
 
-/* A Template's implementation, picked per render: the precompiled ES module
- * export (see ipyvue.esm.define_module and Template.esm_module) or the
- * compiled template. Functional, so refs, events and slots reach the
- * implementation; the parent render reads the module and the model's
- * version, so it renders the new implementation after a change. */
+/* A Template's precompiled ES module export (see ipyvue.esm.define_module
+ * and Template.esm_module), picked per render. Functional, so refs, events
+ * and slots reach the export; the parent render reads the module and the
+ * model's version, so it renders the new implementation after a change. */
 function createTemplateHolder(model, templateModel, parentView) {
-    let compiled = null;
     let esm = {};
     return {
         functional: true,
@@ -259,9 +256,8 @@ function createTemplateHolder(model, templateModel, parentView) {
             const version = implementationVersion(model, templateModel);
             const moduleName = templateModel.get('esm_module');
             if (!moduleName) {
-                compiled = compiled
-                    || createCompiledComponentObject(model, templateModel, parentView);
-                return h(compiled, data, children);
+                /* esm_module was unset: render the current compiled template */
+                return h(createComponentObject(model, parentView), data, children);
             }
             const component = getModuleExport(moduleName, templateModel.get('esm_export'));
             if (!component) {

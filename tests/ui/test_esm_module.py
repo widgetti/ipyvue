@@ -1208,3 +1208,29 @@ def test_mounted_template_switches_to_and_from_esm_module(
 
     template.esm_module = None
     page_session.locator(".esm-toggle-compiled >> text=compiled").wait_for()
+
+
+def test_template_back_from_esm_module_shows_changed_template(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-toggle-change-module",
+        code="""
+        export const Toggled = {
+            template: `<div class="esm-toggle-change-esm">from esm</div>`,
+        };
+        """,
+    )
+    template = vue.Template(
+        template="<div class='esm-toggle-change-a'>compiled a</div>",
+        esm_export="Toggled",
+    )
+    display(vue.VueTemplate(template=template))
+    page_session.locator(".esm-toggle-change-a >> text=compiled a").wait_for()
+
+    template.esm_module = "esm-toggle-change-module"
+    page_session.locator(".esm-toggle-change-esm >> text=from esm").wait_for()
+
+    template.template = "<div class='esm-toggle-change-b'>compiled b</div>"
+    template.esm_module = None
+    page_session.locator(".esm-toggle-change-b >> text=compiled b").wait_for()
