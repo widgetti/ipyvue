@@ -59,7 +59,7 @@ export async function triggerTemplateChangeForComponentTags(
         ? templateModels.filter(model => names.some(name => templateText(model).match(componentTagRe(name))))
         : [];
     triggerTemplateChange(
-        affectedTemplateModels.length || !fallbackAll ? affectedTemplateModels : templateModels,
+        names.length || !fallbackAll ? affectedTemplateModels : templateModels,
     );
 }
 
