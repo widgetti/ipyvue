@@ -29,6 +29,8 @@ function applyScopeId(vm, scopeId) {
 const templateChangeEvents = 'change:template change:esm_module change:esm_export';
 const esmModelChangeEvents = 'change:components change:events';
 const templateRefreshVersions = new WeakMap();
+const registeredTemplateRefreshModels = new WeakSet();
+const registeredVueTemplateRefreshModels = new WeakSet();
 
 function getTemplateRefreshVersion(model) {
     return templateRefreshVersions.get(model) || 0;
@@ -41,6 +43,21 @@ function bumpTemplateRefreshVersion(model) {
 function templateVersionModel(model) {
     const template = model instanceof VueTemplateModel && model.get('template');
     return template instanceof TemplateModel ? template : model;
+}
+
+function registerTemplateRefreshListeners(model) {
+    if (!(model instanceof VueTemplateModel)) {
+        return;
+    }
+    const versionModel = templateVersionModel(model);
+    if (!registeredTemplateRefreshModels.has(versionModel)) {
+        registeredTemplateRefreshModels.add(versionModel);
+        versionModel.on(templateChangeEvents, () => bumpTemplateRefreshVersion(versionModel));
+    }
+    if (!registeredVueTemplateRefreshModels.has(model)) {
+        registeredVueTemplateRefreshModels.add(model);
+        model.on(esmModelChangeEvents, () => bumpTemplateRefreshVersion(templateVersionModel(model)));
+    }
 }
 
 function collectRefreshCids(vm) {
@@ -159,6 +176,7 @@ function createComponentObject(model, parentView) {
 
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
+    registerTemplateRefreshListeners(model);
     if (isTemplateModel && templateModel.get('esm_module')) {
         return createEsmTemplateComponent(model, templateModel, parentView);
     }
@@ -249,7 +267,6 @@ function createComponentObject(model, parentView) {
         created() {
             this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
-                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -318,7 +335,6 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
         created() {
             this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
-                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -401,7 +417,6 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
                 created() {
                     this.__ipyvueModelCid = model.cid;
                     this.__onTemplateChange = () => {
-                        bumpTemplateRefreshVersion(templateModel);
                         forceUpdateOwnerAndRoot(this);
                     };
                     templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -457,7 +472,6 @@ function emptyComponent(templateModel, model) {
         created() {
             this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
-                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -572,6 +586,7 @@ function createMethods(model, parentView) {
 
 function createInstanceComponents(components, parentView) {
     return components.reduce((result, [name, model]) => {
+        registerTemplateRefreshListeners(model);
         // eslint-disable-next-line no-param-reassign
         result[name] = model instanceof VueTemplateModel
             ? {
@@ -593,8 +608,9 @@ function innerComponent(model, parentView) {
         model.__innerComponentsByParentView = new WeakMap();
     }
     const cached = model.__innerComponentsByParentView.get(parentView);
-    if (!cached || cached.version !== version) {
+    if (!cached || cached.versionModel !== versionModel || cached.version !== version) {
         model.__innerComponentsByParentView.set(parentView, {
+            versionModel,
             version,
             component: createComponentObject(model, parentView),
         });

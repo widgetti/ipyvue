@@ -238,6 +238,91 @@ def test_esm_module_late_plugin_refreshes_esm_template_export(
     page_session.locator(".esm-late-tag >> text=late esm").wait_for()
 
 
+def test_hidden_esm_child_refreshes_after_module_reload(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-hidden-child-module",
+        code="""
+        export const Child = {
+            template: `<div class="esm-hidden-child">hidden v1</div>`,
+        };
+        """,
+    )
+
+    child = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-hidden-child-module", esm_export="Child")
+    )
+
+    class Parent(vue.VueTemplate):
+        show = traitlets.Bool(True).tag(sync=True)
+        template = traitlets.Unicode(
+            """
+            <template>
+                <child-view v-if="show"></child-view>
+            </template>
+            """
+        ).tag(sync=True)
+
+    parent = Parent(components={"child-view": child})
+    display(parent)
+    page_session.locator(".esm-hidden-child >> text=hidden v1").wait_for()
+
+    parent.show = False
+    page_session.locator(".esm-hidden-child").wait_for(state="detached")
+
+    vue.define_module(
+        "esm-hidden-child-module",
+        code="""
+        export const Child = {
+            template: `<div class="esm-hidden-child">hidden v2</div>`,
+        };
+        """,
+    )
+    parent.show = True
+    page_session.locator(".esm-hidden-child >> text=hidden v2").wait_for()
+
+
+def test_hidden_child_uses_replaced_template_model(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    child = vue.VueTemplate(
+        template=vue.Template(
+            template="""
+            <template>
+                <div class="hidden-replaced-child">template v1</div>
+            </template>
+            """
+        )
+    )
+
+    class Parent(vue.VueTemplate):
+        show = traitlets.Bool(True).tag(sync=True)
+        template = traitlets.Unicode(
+            """
+            <template>
+                <child-view v-if="show"></child-view>
+            </template>
+            """
+        ).tag(sync=True)
+
+    parent = Parent(components={"child-view": child})
+    display(parent)
+    page_session.locator(".hidden-replaced-child >> text=template v1").wait_for()
+
+    parent.show = False
+    page_session.locator(".hidden-replaced-child").wait_for(state="detached")
+    child.template = vue.Template(
+        template="""
+        <template>
+            <div class="hidden-replaced-child">template v2</div>
+        </template>
+        """
+    )
+    parent.show = True
+    page_session.locator(".hidden-replaced-child >> text=template v2").wait_for()
+
+
 def test_esm_module_component_as_tag(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -796,6 +881,71 @@ def test_esm_parent_update_keeps_nested_child_local_state(
     page_session.locator(".esm-parent-tick >> text=tick 1").wait_for()
     page_session.locator(".nested-parent-slot >> text=slot 1").wait_for()
     page_session.locator(".nested-local-counter >> text=child 1").wait_for()
+
+
+def test_late_plugin_refresh_keeps_unrelated_local_state(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Typed(vue.VueTemplate):
+        template = traitlets.Unicode(
+            """
+            <template>
+                <input class="late-plugin-local-input" v-model="local">
+            </template>
+            <script>
+                module.exports = {
+                    data() {
+                        return { local: "" };
+                    }
+                }
+            </script>
+            """
+        ).tag(sync=True)
+
+    class Host(vue.VueTemplate):
+        template = traitlets.Unicode(
+            """
+            <template>
+                <esm-late-state-tag name="ready"></esm-late-state-tag>
+            </template>
+            """
+        ).tag(sync=True)
+
+    display(vue.Html(tag="div", children=[Typed(), Host()]))
+    page_session.locator("esm-late-state-tag").wait_for(state="attached")
+    page_session.locator(".late-plugin-local-input").fill("typed text")
+
+    vue.define_module(
+        "esm-late-state-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        await new Promise(resolve => { window.__releaseLateStatePlugin = resolve; });
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-late-state-tag", {
+                    props: { name: { type: String, required: true } },
+                    render(h) {
+                        return h(
+                            "div",
+                            { class: "esm-late-state-tag" },
+                            `plugin ${this.name}`,
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.wait_for_function(
+        "typeof window.__releaseLateStatePlugin === 'function'"
+    )
+    page_session.evaluate("window.__releaseLateStatePlugin()")
+    page_session.locator(".esm-late-state-tag >> text=plugin ready").wait_for()
+    assert (
+        page_session.locator(".late-plugin-local-input").input_value() == "typed text"
+    )
 
 
 def test_esm_template_recovers_when_missing_dependency_is_removed(

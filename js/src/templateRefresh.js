@@ -37,6 +37,60 @@ function forceUpdateRoots() {
     Array.from(roots).forEach(forceUpdateTree);
 }
 
+function collectRefreshCids(vm) {
+    let current = vm;
+    while (current && !current._isDestroyed) {
+        if (current.__ipyvueModelCid) {
+            return new Set([current.__ipyvueModelCid]);
+        }
+        current = current.$parent;
+    }
+    return new Set();
+}
+
+function deleteChildCachePath(target, pathCids) {
+    if (!target.childCache || !pathCids.size) {
+        return;
+    }
+    pathCids.forEach((cid) => {
+        delete target.childCache[cid];
+    });
+    if (target.childIds) {
+        // eslint-disable-next-line no-param-reassign
+        target.childIds = target.childIds.filter(cid => !pathCids.has(cid));
+    }
+}
+
+function nearestVueInstance(element) {
+    let current = element;
+    while (current) {
+        if (current.__vue__) {
+            return current.__vue__;
+        }
+        current = current.parentNode;
+    }
+    return null;
+}
+
+function forceUpdateInstance(vm) {
+    if (!vm || vm._isDestroyed) {
+        return;
+    }
+    deleteChildCachePath(vm, collectRefreshCids(vm));
+    vm.$forceUpdate();
+}
+
+function forceUpdateComponentTags(names) {
+    const instances = new Set();
+    names.forEach((name) => {
+        Array.from(document.getElementsByTagName(name))
+            .map(nearestVueInstance)
+            .filter(vm => vm && !vm._isDestroyed)
+            .forEach(vm => instances.add(vm));
+    });
+    instances.forEach(forceUpdateInstance);
+}
+
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -105,7 +159,11 @@ export async function triggerTemplateChangeForComponentTags(
             ...esmTemplateModels,
         ],
     );
-    forceUpdateRoots();
+    if (names.length) {
+        forceUpdateComponentTags(names);
+    } else if (fallbackAll) {
+        forceUpdateRoots();
+    }
 }
 
 function templateTarget(model) {
