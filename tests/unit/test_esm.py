@@ -50,3 +50,16 @@ def test_failed_path_read_does_not_register_name(tmp_path):
 def test_plain_string_module_argument_raises():
     with pytest.raises(TypeError, match="url=|code="):
         esm.define_module("string-module", "https://example.test/module.mjs")
+
+
+def test_define_module_redefine_updates_live_widget_without_cycle():
+    a = esm.define_module("a", code="export default 1;")
+    b = esm.define_module("b", code="export default 2;")
+
+    # re-running the cell must not create a2->[b], b2->[a]
+    a2 = esm.define_module("a", code="export default 3;")
+    b2 = esm.define_module("b", url="https://example.invalid/b.mjs")
+
+    assert a2 is a and b2 is b
+    assert a.dependencies == [] and a.code == "export default 3;"
+    assert b.dependencies == ["a"] and b.url and b.code == ""

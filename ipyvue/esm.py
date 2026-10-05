@@ -64,6 +64,19 @@ def define_module(
         raise TypeError("module must be a Path; use url= or code= for strings")
     if sum(source is not None for source in (module, code, url)) != 1:
         raise TypeError("pass exactly one of module, code, or url")
+    if module is not None:
+        code = module.read_text(encoding="utf8")
+    existing = _module_widgets.get(name)
+    if existing is not None and existing.comm is not None:
+        # redefining updates the live widget, like solara does: a second
+        # widget would get the first as a dependency cycle (a->[b], b->[a])
+        # and both would be restored on page reload
+        with existing.hold_sync():
+            existing.url = url
+            existing.code = code or ""
+            if dependencies is not None:
+                existing.dependencies = dependencies
+        return existing
     if dependencies is None:
         dependencies = [
             n
@@ -72,8 +85,6 @@ def define_module(
             and (widget := _module_widgets.get(n)) is not None
             and widget.comm is not None
         ]
-    if module is not None:
-        code = module.read_text(encoding="utf8")
     widget = Module(
         code=code or "",
         url=url,
