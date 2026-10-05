@@ -28,28 +28,63 @@ function applyScopeId(vm, scopeId) {
 
 const templateChangeEvents = 'change:template change:esm_module change:esm_export';
 const esmModelChangeEvents = 'change:components change:events';
+const templateRefreshVersions = new WeakMap();
+
+function getTemplateRefreshVersion(model) {
+    return templateRefreshVersions.get(model) || 0;
+}
+
+function bumpTemplateRefreshVersion(model) {
+    templateRefreshVersions.set(model, getTemplateRefreshVersion(model) + 1);
+}
+
+function templateVersionModel(model) {
+    const template = model instanceof VueTemplateModel && model.get('template');
+    return template instanceof TemplateModel ? template : model;
+}
+
+function collectRefreshCids(vm) {
+    let current = vm;
+    while (current && !current._isDestroyed) {
+        if (current.__ipyvueModelCid) {
+            return new Set([current.__ipyvueModelCid]);
+        }
+        current = current.$parent;
+    }
+    return new Set();
+}
+
+function deleteChildCachePath(target, pathCids) {
+    if (!target.childCache || !pathCids.size) {
+        return;
+    }
+    pathCids.forEach((cid) => {
+        delete target.childCache[cid];
+    });
+    if (target.childIds) {
+        // eslint-disable-next-line no-param-reassign
+        target.childIds = target.childIds.filter(cid => !pathCids.has(cid));
+    }
+}
 
 function forceUpdateOwnerAndRoot(vm) {
     const seen = new Set();
+    const pathCids = collectRefreshCids(vm);
     const forceUpdate = (target) => {
         if (!target || target._isDestroyed || seen.has(target)) {
             return;
         }
         seen.add(target);
-        if (target.childCache) {
-            target.childCache = {};
-            target.childIds = [];
-        }
+        deleteChildCachePath(target, pathCids);
         target.$forceUpdate();
     };
     const owner = vm.$vnode && vm.$vnode.context;
     let current = vm;
-    while (current && !current._isDestroyed) {
+    while (current && !current._isDestroyed && current !== current.$root) {
         forceUpdate(current);
         current = current.$parent;
     }
     forceUpdate(owner);
-    forceUpdate(vm.$root);
 }
 
 function scopeStyleElement(styleElt, scopeId) {
@@ -110,6 +145,9 @@ export function vueTemplateRender(createElement, model, parentView) {
 function createComponentObject(model, parentView) {
     if (model instanceof VueModel) {
         return {
+            created() {
+                this.__ipyvueModelCid = model.cid;
+            },
             render(createElement) {
                 return vueRender(createElement, model, parentView, {});
             },
@@ -209,7 +247,9 @@ function createComponentObject(model, parentView) {
             callVueFn('beforeCreate', this);
         },
         created() {
+            this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
+                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -276,7 +316,9 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
             return createDataMapping(model);
         },
         created() {
+            this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
+                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -344,7 +386,7 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
                 model.__esmComponentsByParentView.set(parentView, { key: cacheKey, component });
             } catch (error) {
                 console.error(`ipyvue: failed to create ES module component "${moduleName}"`, error);
-                return emptyComponent(templateModel);
+                return emptyComponent(templateModel, model);
             }
         } else {
             const factory = () => modulePromise.then(componentFromModule).catch((error) => {
@@ -357,7 +399,9 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
              * the owner must be an instance whose render we control */
             const component = {
                 created() {
+                    this.__ipyvueModelCid = model.cid;
                     this.__onTemplateChange = () => {
+                        bumpTemplateRefreshVersion(templateModel);
                         forceUpdateOwnerAndRoot(this);
                     };
                     templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -408,10 +452,12 @@ function esmComponentModuleKeysEqual(left, right) {
     });
 }
 
-function emptyComponent(templateModel) {
+function emptyComponent(templateModel, model) {
     return {
         created() {
+            this.__ipyvueModelCid = model.cid;
             this.__onTemplateChange = () => {
+                bumpTemplateRefreshVersion(templateModel);
                 forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
@@ -529,13 +575,31 @@ function createInstanceComponents(components, parentView) {
         // eslint-disable-next-line no-param-reassign
         result[name] = model instanceof VueTemplateModel
             ? {
-                render(h) {
-                    return h(createComponentObject(model, parentView));
+                functional: true,
+                render(h, ctx) {
+                    return h(innerComponent(model, parentView), ctx.data, ctx.children);
                 },
             }
             : createComponentObject(model, parentView);
         return result;
     }, {});
+}
+
+function innerComponent(model, parentView) {
+    const versionModel = templateVersionModel(model);
+    const version = getTemplateRefreshVersion(versionModel);
+    if (!model.__innerComponentsByParentView) {
+        // eslint-disable-next-line no-param-reassign
+        model.__innerComponentsByParentView = new WeakMap();
+    }
+    const cached = model.__innerComponentsByParentView.get(parentView);
+    if (!cached || cached.version !== version) {
+        model.__innerComponentsByParentView.set(parentView, {
+            version,
+            component: createComponentObject(model, parentView),
+        });
+    }
+    return model.__innerComponentsByParentView.get(parentView).component;
 }
 
 function createClassComponents(components, containerModel, parentView) {
@@ -696,6 +760,7 @@ Vue.component('jupyter-widget', {
     data() {
         return {
             component: null,
+            model: null,
         };
     },
     created() {
@@ -711,13 +776,17 @@ Vue.component('jupyter-widget', {
             this.viewCtx
                 .getModelById(this.widget.substring(10))
                 .then((mdl) => {
+                    this.model = mdl;
                     this.component = createComponentObject(mdl, this.viewCtx.getView());
                 });
         },
     },
     render(createElement) {
-        if (!this.component) {
+        if (!this.model || !this.component) {
             return createElement('div');
+        }
+        if (this.model instanceof VueTemplateModel) {
+            return createElement(innerComponent(this.model, this.viewCtx.getView()));
         }
         return createElement(this.component);
     },

@@ -97,6 +97,7 @@ export function vueRender(createElement, model, parentView, slotScopes) {
             };
         },
         created() {
+            this.__ipyvueModelCid = model.cid;
             addListeners(model, this);
         },
         render(createElement2) {

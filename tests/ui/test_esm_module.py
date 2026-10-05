@@ -692,6 +692,112 @@ def test_esm_vue_template_inside_vuetify_container_refreshes_on_module_reload(
     page_session.locator(".esm-nested-vuetify >> text=vuetify v2").wait_for()
 
 
+def test_esm_refresh_keeps_sibling_local_state(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-sibling-state-module",
+        code="""
+        export const Child = {
+            template: `<div class="esm-sibling-state">esm v1</div>`,
+        };
+        """,
+    )
+
+    typed = vue.VueTemplate(
+        template="""
+        <template>
+            <input class="sibling-local-input" v-model="local">
+        </template>
+        <script>
+            module.exports = {
+                data() {
+                    return { local: "" };
+                }
+            }
+        </script>
+        """
+    )
+    esm_child = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-sibling-state-module", esm_export="Child")
+    )
+
+    display(vue.Html(tag="div", children=[typed, esm_child]))
+    page_session.locator(".esm-sibling-state >> text=esm v1").wait_for()
+    page_session.locator(".sibling-local-input").fill("typed text")
+
+    vue.define_module(
+        "esm-sibling-state-module",
+        code="""
+        export const Child = {
+            template: `<div class="esm-sibling-state">esm v2</div>`,
+        };
+        """,
+    )
+    page_session.locator(".esm-sibling-state >> text=esm v2").wait_for()
+    assert page_session.locator(".sibling-local-input").input_value() == "typed text"
+
+
+def test_esm_parent_update_keeps_nested_child_local_state(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-parent-state-module",
+        code="""
+        export const Parent = {
+            template: `
+                <div>
+                    <span class="esm-parent-tick">tick {{ tick }}</span>
+                    <state-child>slot {{ tick }}</state-child>
+                </div>
+            `,
+        };
+        """,
+    )
+
+    child = vue.VueTemplate(
+        template="""
+        <template>
+            <div>
+                <button class="nested-local-counter" @click="count += 1">
+                    child {{ count }}
+                </button>
+                <span class="nested-parent-slot"><slot></slot></span>
+            </div>
+        </template>
+        <script>
+            module.exports = {
+                data() {
+                    return { count: 0 };
+                }
+            }
+        </script>
+        """
+    )
+
+    class Parent(vue.VueTemplate):
+        tick = traitlets.Int(0).tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-parent-state-module", esm_export="Parent"
+            )
+
+    parent = Parent(components={"state-child": child})
+    display(parent)
+    page_session.locator(".nested-parent-slot >> text=slot 0").wait_for()
+    counter = page_session.locator(".nested-local-counter")
+    counter.wait_for()
+    counter.click()
+    page_session.locator(".nested-local-counter >> text=child 1").wait_for()
+
+    parent.tick = 1
+    page_session.locator(".esm-parent-tick >> text=tick 1").wait_for()
+    page_session.locator(".nested-parent-slot >> text=slot 1").wait_for()
+    page_session.locator(".nested-local-counter >> text=child 1").wait_for()
+
+
 def test_esm_template_recovers_when_missing_dependency_is_removed(
     solara_test, page_session: playwright.sync_api.Page
 ):
