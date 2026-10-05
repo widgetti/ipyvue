@@ -1,7 +1,6 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import {
-    forceUpdateRoots,
     invalidateModule,
     isStaleModuleLoad,
     loadModuleFromCode,
@@ -9,6 +8,10 @@ import {
     provideModule,
     requestModule,
 } from './esmModule';
+import {
+    triggerTemplateChangeForComponentTags,
+    triggerTemplateChangeForEsmModule,
+} from './templateRefresh';
 
 const moduleGenerations = new Map();
 
@@ -20,6 +23,15 @@ function nextGeneration(name) {
 
 function currentGeneration(name, generation) {
     return moduleGenerations.get(name) === generation;
+}
+
+function componentRegistryNames() {
+    return Object.keys(Vue.options.components || {});
+}
+
+function findNewComponentNames(beforeNames) {
+    const before = new Set(beforeNames);
+    return componentRegistryNames().filter(name => !before.has(name));
 }
 
 /* Ships a precompiled ES module (see ipyvue.esm.define_module). A module
@@ -41,6 +53,7 @@ export class ModuleModel extends WidgetModel {
 
     initialize(attributes, options) {
         super.initialize(attributes, options);
+        this.widgetManager = options['widget_manager'];
         invalidateModule(this.get('name'));
         this.load();
         this.on('change:code change:url', () => {
@@ -66,11 +79,31 @@ export class ModuleModel extends WidgetModel {
             if (!isCurrent()) {
                 return;
             }
+            let pluginComponentNames = null;
             if (module.default && typeof module.default.install === 'function') {
+                const beforeComponentNames = componentRegistryNames();
                 Vue.use(module.default);
-                forceUpdateRoots();
+                pluginComponentNames = findNewComponentNames(beforeComponentNames);
             }
-            provideModule(name, module);
+            const replacesExistingModule = provideModule(name, module);
+            if (pluginComponentNames) {
+                try {
+                    await triggerTemplateChangeForComponentTags(
+                        this.widgetManager,
+                        pluginComponentNames,
+                        { fallbackAll: true },
+                    );
+                } catch (refreshError) {
+                    console.warn(`ipyvue: could not refresh templates for ES module plugin "${name}"`, refreshError);
+                }
+            }
+            if (replacesExistingModule) {
+                try {
+                    await triggerTemplateChangeForEsmModule(this.widgetManager, name);
+                } catch (refreshError) {
+                    console.warn(`ipyvue: could not refresh templates for ES module "${name}"`, refreshError);
+                }
+            }
         } catch (e) {
             if (!isCurrent() || isStaleModuleLoad(e)) {
                 return;

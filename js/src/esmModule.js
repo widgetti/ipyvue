@@ -6,43 +6,23 @@ import esModuleShims from './es-module-shims-txt';
  * to re-point an import map entry on hot reload, and so do we. */
 window.esmsInitOptions = { ...window.esmsInitOptions, shimMode: true, mapOverrides: true };
 
-/* Roots created by VueView: re-rendered when a module plugin registers
- * components after they already rendered (unknown tags resolve on the
- * next render in vue2). */
-const rootInstances = new Set();
-
-export function trackRootInstance(vm) {
-    rootInstances.add(vm);
-}
-
-export function untrackRootInstance(vm) {
-    rootInstances.delete(vm);
-}
-
-function forceUpdateTree(vm) {
-    vm.$forceUpdate();
-    (vm.$children || []).forEach(forceUpdateTree);
-}
-
-export function forceUpdateRoots() {
-    /* re-render everything: components that rendered a tag before its module
-     * registered it resolve the real component on their next render */
-    rootInstances.forEach(forceUpdateTree);
-}
-
 /* Named-module registry (mirrors the vue3 branch): Module widgets provide
  * modules by name; consumers await them, so load order does not matter. */
 const providedModules = new Map();
 const moduleResolvers = new Map();
 const loadedModules = new Map();
+const providedModuleNames = new Set();
 
 export function provideModule(name, module) {
+    const replacesExistingModule = providedModuleNames.has(name);
+    providedModuleNames.add(name);
     loadedModules.set(name, module);
     if (moduleResolvers.has(name)) {
         moduleResolvers.get(name).resolve(module);
         moduleResolvers.delete(name);
     }
     providedModules.set(name, Promise.resolve(module));
+    return replacesExistingModule;
 }
 
 /* The module when already loaded, undefined otherwise: consumers that can

@@ -3,6 +3,7 @@ import { DOMWidgetModel } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import httpVueLoader from './httpVueLoader';
 import {TemplateModel} from './Template';
+import { componentTagRe } from './templateRefresh';
 
 export class VueComponentModel extends DOMWidgetModel {
     defaults() {
@@ -35,14 +36,10 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 const affectedComponents = [];
 
-                function re(searchName) {
-                    return new RegExp(`\\<${searchName}[ />\n]`, 'g');
-                }
-
                 function find_usage(searchName) {
                     affectedComponents.push(searchName);
                     componentModels
-                        .filter(model => model.get('component').match(re(searchName)))
+                        .filter(model => model.get('component').match(componentTagRe(searchName)))
                         .forEach((model) => {
                             const cname = model.get('name');
                             if (!affectedComponents.includes(cname)) {
@@ -56,7 +53,7 @@ export class VueComponentModel extends DOMWidgetModel {
                 const affectedTemplateModels = models
                     .filter(model => model instanceof TemplateModel
                         && model.get('template')
-                        && affectedComponents.some(cname => model.get('template').match(re(cname))));
+                        && affectedComponents.some(cname => model.get('template').match(componentTagRe(cname))));
 
                 affectedTemplateModels.forEach(model => model.trigger('change:template'));
             })();

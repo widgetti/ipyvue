@@ -6,6 +6,7 @@ if sys.version_info < (3, 7):
 
 import playwright.sync_api
 import traitlets
+import ipywidgets as widgets
 from IPython.display import display
 
 import ipyvue as vue
@@ -65,6 +66,51 @@ def test_esm_module_plugin_registers_components(
 
     display(Widget())
     page_session.locator(".esm-plugin-hello >> text=hello from python").wait_for()
+
+
+def test_esm_module_late_plugin_refreshes_existing_template(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Widget(vue.VueTemplate):
+        template = traitlets.Unicode(
+            """
+            <template>
+                <esm-late-plugin-hello name="late"></esm-late-plugin-hello>
+            </template>
+            """
+        ).tag(sync=True)
+
+    display(Widget())
+    page_session.locator("esm-late-plugin-hello").wait_for()
+
+    vue.define_module(
+        "esm-late-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        await new Promise(resolve => { window.__releaseLatePlugin = resolve; });
+
+        const Hello = {
+            props: { name: { type: String, required: true } },
+            render(h) {
+                return h(
+                    "div",
+                    { class: "esm-late-plugin-hello" },
+                    `plugin ${this.name}`,
+                );
+            },
+        };
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-late-plugin-hello", Hello);
+            },
+        };
+        """,
+    )
+    page_session.wait_for_function("typeof window.__releaseLatePlugin === 'function'")
+    page_session.evaluate("window.__releaseLatePlugin()")
+    page_session.locator(".esm-late-plugin-hello >> text=plugin late").wait_for()
 
 
 def test_esm_module_component_as_tag(
@@ -219,6 +265,115 @@ def test_esm_module_code_change_resolves_existing_waiter(
     )
 
     page_session.locator(".esm-hot >> text=new code hot").wait_for()
+
+
+def test_esm_template_module_code_change_refreshes_mounted_view(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    module = vue.define_module(
+        "esm-refresh-module",
+        code="""
+        export const Hello = {
+            template: `<div class="esm-refresh">v1 {{ label }}</div>`,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        label = traitlets.Unicode("hot").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-refresh-module", esm_export="Hello")
+
+    display(Widget())
+    page_session.locator(".esm-refresh >> text=v1 hot").wait_for()
+
+    module.code = """
+        export const Hello = {
+            template: `<div class="esm-refresh">v2 {{ label }}</div>`,
+        };
+    """
+    page_session.locator(".esm-refresh >> text=v2 hot").wait_for()
+
+
+def test_esm_template_export_change_refreshes_mounted_view(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-export-refresh-module",
+        code="""
+        export const First = {
+            template: `<div class="esm-export-refresh">first {{ label }}</div>`,
+        };
+        export const Second = {
+            template: `<div class="esm-export-refresh">second {{ label }}</div>`,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        label = traitlets.Unicode("export").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-export-refresh-module", esm_export="First"
+            )
+
+    widget = Widget()
+    display(widget)
+    page_session.locator(".esm-export-refresh >> text=first export").wait_for()
+
+    widget.template.esm_export = "Second"
+    page_session.locator(".esm-export-refresh >> text=second export").wait_for()
+
+
+def test_esm_template_missing_export_does_not_break_sibling_then_recovers(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-missing-export-module",
+        code="""
+        export const Present = {
+            template: `<div class="esm-present-export">present {{ label }}</div>`,
+        };
+        """,
+    )
+
+    class Child(vue.VueTemplate):
+        label = traitlets.Unicode("child").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-missing-export-module", esm_export="Missing"
+            )
+
+    class Parent(vue.VueTemplate):
+        child = traitlets.Instance(widgets.Widget, allow_none=True).tag(
+            sync=True, **widgets.widget_serialization
+        )
+        template = traitlets.Unicode(
+            """
+            <template>
+                <div>
+                    <div class="esm-missing-sibling">sibling still renders</div>
+                    <jupyter-widget :widget="child"></jupyter-widget>
+                </div>
+            </template>
+            """
+        ).tag(sync=True)
+
+    child = Child()
+    display(Parent(child=child))
+    page_session.locator(
+        ".esm-missing-sibling >> text=sibling still renders"
+    ).wait_for()
+    page_session.locator(".esm-present-export").wait_for(state="detached")
+
+    child.template.esm_export = "Present"
+    page_session.locator(".esm-present-export >> text=present child").wait_for()
 
 
 def test_esm_module_as_template_implementation(

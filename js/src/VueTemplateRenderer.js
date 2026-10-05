@@ -26,6 +26,8 @@ function applyScopeId(vm, scopeId) {
     vm.$el.setAttribute(scopeId, '');
 }
 
+const templateChangeEvents = 'change:template change:esm_module change:esm_export';
+
 function scopeStyleElement(styleElt, scopeId) {
     const scopeSelector = `[${scopeId}]`;
 
@@ -186,7 +188,7 @@ function createComponentObject(model, parentView) {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
-            templateModel.on('change:template', this.__onTemplateChange);
+            templateModel.on(templateChangeEvents, this.__onTemplateChange);
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -222,7 +224,7 @@ function createComponentObject(model, parentView) {
             callVueFn('updated', this);
         },
         beforeDestroy() {
-            templateModel.off('change:template', this.__onTemplateChange);
+            templateModel.off(templateChangeEvents, this.__onTemplateChange);
             callVueFn('beforeDestroy', this);
         },
         destroyed() {
@@ -250,7 +252,14 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
             return createDataMapping(model);
         },
         created() {
+            this.__onTemplateChange = () => {
+                this.$root.$forceUpdate();
+            };
+            templateModel.on(templateChangeEvents, this.__onTemplateChange);
             addModelListeners(model, this);
+        },
+        beforeDestroy() {
+            templateModel.off(templateChangeEvents, this.__onTemplateChange);
         },
         watch: createWatches(model, parentView, null),
         methods: createMethods(model, parentView),
@@ -283,35 +292,85 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
         }
         return { mixins: [component, modelMixin] };
     };
-    /* memoize per widget, keyed on the module registry promise: a fresh
-     * component every render would never settle. A module reload provides a
-     * new promise, so hot reload gets a fresh component. */
     const modulePromise = requestModule(moduleName);
-    if (model.__esmComponentFor !== modulePromise) {
+    const module = getLoadedModule(moduleName);
+    const moduleKey = module || modulePromise;
+    const cacheKey = {
+        moduleKey,
+        moduleName,
+        exportName,
+        components: model.get('components'),
+        events: model.get('events'),
+    };
+    if (!model.__esmComponentsByParentView) {
         // eslint-disable-next-line no-param-reassign
-        model.__esmComponentFor = modulePromise;
-        const module = getLoadedModule(moduleName);
+        model.__esmComponentsByParentView = new WeakMap();
+    }
+    const cached = model.__esmComponentsByParentView.get(parentView);
+    if (!cached || !esmComponentCacheKeysEqual(cached.key, cacheKey)) {
         if (module) {
             /* the module is already loaded: build the component
              * synchronously, so the widget renders in one pass and keeps
              * el.__vue__ pointing at the component itself */
-            // eslint-disable-next-line no-param-reassign
-            model.__esmComponent = componentFromModule(module);
+            try {
+                const component = componentFromModule(module);
+                model.__esmComponentsByParentView.set(parentView, { key: cacheKey, component });
+            } catch (error) {
+                console.error(`ipyvue: failed to create ES module component "${moduleName}"`, error);
+                return emptyComponent(templateModel);
+            }
         } else {
-            const factory = () => modulePromise.then(componentFromModule);
+            const factory = () => modulePromise.then(componentFromModule).catch((error) => {
+                model.__esmComponentsByParentView.delete(parentView);
+                throw error;
+            });
             /* wrap the async factory in a component of our own: resolving
              * only re-renders the factory's owner, and embedders can cache
              * the surrounding vnodes (rendering the factory ownerless), so
              * the owner must be an instance whose render we control */
-            // eslint-disable-next-line no-param-reassign
-            model.__esmComponent = {
+            const component = {
+                created() {
+                    this.__onTemplateChange = () => {
+                        this.$root.$forceUpdate();
+                    };
+                    templateModel.on(templateChangeEvents, this.__onTemplateChange);
+                },
                 render(h) {
                     return h(factory);
                 },
+                beforeDestroy() {
+                    templateModel.off(templateChangeEvents, this.__onTemplateChange);
+                },
             };
+            model.__esmComponentsByParentView.set(parentView, { key: cacheKey, component });
         }
     }
-    return model.__esmComponent;
+    return model.__esmComponentsByParentView.get(parentView).component;
+}
+
+function esmComponentCacheKeysEqual(left, right) {
+    return left.moduleKey === right.moduleKey
+        && left.moduleName === right.moduleName
+        && left.exportName === right.exportName
+        && left.components === right.components
+        && left.events === right.events;
+}
+
+function emptyComponent(templateModel) {
+    return {
+        created() {
+            this.__onTemplateChange = () => {
+                this.$root.$forceUpdate();
+            };
+            templateModel.on(templateChangeEvents, this.__onTemplateChange);
+        },
+        render(h) {
+            return h();
+        },
+        beforeDestroy() {
+            templateModel.off(templateChangeEvents, this.__onTemplateChange);
+        },
+    };
 }
 
 function createDataMapping(model) {
