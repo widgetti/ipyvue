@@ -28,7 +28,7 @@ export function addApp(app, widget_manager) {
 /* An ES module (see esm.py) whose default export is a vue plugin registers
  * its own components: we app.use it on every app, current and future.
  * app.use ignores repeated installs of the same plugin. */
-export async function installModulePlugin(plugin, moduleName, widget_manager) {
+export async function installModulePlugin(plugin, moduleName) {
     modulePlugins.set(moduleName, plugin);
 
     const componentNames = new Set();
@@ -40,9 +40,17 @@ export async function installModulePlugin(plugin, moduleName, widget_manager) {
             .forEach(([name]) => componentNames.add(name));
     });
 
-    await triggerTemplatesForComponentNames(widget_manager, [...componentNames], {
-        fallbackToAll: componentNames.size === 0,
+    return [...componentNames];
+}
+
+export async function refreshAfterModulePluginInstall(widget_manager, componentNames) {
+    await triggerTemplatesForComponentNames(widget_manager, componentNames, {
+        fallbackToAll: componentNames.length === 0,
     });
+    const models = await allModels(widget_manager);
+    triggerTemplateChanges(models
+        .filter(model => model instanceof TemplateModel && model.get('esm_module')));
+    forceUpdateApps();
 }
 
 function escapeRegExp(value) {
@@ -105,7 +113,10 @@ async function allModels(widget_manager) {
         }
         return Object.values(manager._models);
     });
-    const models = await Promise.all(modelValues);
+    const results = await Promise.allSettled(modelValues);
+    const models = results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
     return [...new Set(models)];
 }
 
@@ -140,8 +151,44 @@ export async function triggerTemplatesForModule(widget_manager, moduleName) {
     triggerTemplateChanges(matches);
 }
 
+function forceUpdateApps() {
+    apps.forEach((app) => {
+        forceUpdateInstanceTree(app._instance);
+    });
+}
+
+function forceUpdateInstanceTree(instance, seen = new Set()) {
+    if (!instance || seen.has(instance)) {
+        return;
+    }
+    seen.add(instance);
+    if (typeof instance.update === 'function') {
+        instance.update();
+    }
+    forceUpdateVNodeTree(instance.subTree, seen);
+}
+
+function forceUpdateVNodeTree(vnode, seen) {
+    if (!vnode) {
+        return;
+    }
+    if (Array.isArray(vnode)) {
+        vnode.forEach(child => forceUpdateVNodeTree(child, seen));
+        return;
+    }
+    if (vnode.component) {
+        forceUpdateInstanceTree(vnode.component, seen);
+    }
+    if (Array.isArray(vnode.children)) {
+        vnode.children.forEach(child => forceUpdateVNodeTree(child, seen));
+    }
+    if (Array.isArray(vnode.dynamicChildren)) {
+        vnode.dynamicChildren.forEach(child => forceUpdateVNodeTree(child, seen));
+    }
+}
+
 async function syncComponentModels(app, widget_manager) {
-    const models = await Promise.all(Object.values(widget_manager._models));
+    const models = await allModels(widget_manager);
     models
         .filter(model => model instanceof VueComponentModel)
         .forEach(model => registerComponentModel(app, model))
@@ -204,7 +251,7 @@ export class VueComponentModel extends DOMWidgetModel {
             apps.forEach(app => registerComponentModel(app, this));
 
             (async () => {
-                const models = await Promise.all(Object.values(widget_manager._models));
+                const models = await allModels(widget_manager);
                 const componentModels = models
                     .filter(model => model instanceof VueComponentModel);
 

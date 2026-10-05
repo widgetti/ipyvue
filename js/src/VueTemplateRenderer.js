@@ -9,8 +9,12 @@ import { TemplateModel } from './Template';
 import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVueTemplate";
 
 const templateRefreshVersions = new WeakMap();
+const templateOwners = new WeakMap();
 
 export function vueTemplateRender(model, parentView) {
+    if (model instanceof VueTemplateModel) {
+        addTemplateOwner(templateRefreshTarget(model));
+    }
     return Vue.h(createComponentObject(model, parentView), {
         key: templateRenderKey(model),
     });
@@ -78,17 +82,19 @@ export function createModelMixin(model, templateModel, parentView) {
         watch: createWatches(model, parentView),
         created() {
             this.__onTemplateChange = () => {
-                bumpTemplateRefreshVersion(templateModel);
-                if (typeof this.viewCtx.refreshRoot === 'function') {
-                    this.viewCtx.refreshRoot();
-                } else {
-                    this.$root.$forceUpdate();
-                }
+                refreshTemplateOwners(templateModel, () => {
+                    if (typeof this.viewCtx.refreshRoot === 'function') {
+                        this.viewCtx.refreshRoot();
+                    } else {
+                        this.$root.$forceUpdate();
+                    }
+                });
             };
             templateModel.on('change:template', this.__onTemplateChange);
             templateModel.on('change:source_url', this.__onTemplateChange);
             templateModel.on('change:esm_module', this.__onTemplateChange);
             templateModel.on('change:esm_export', this.__onTemplateChange);
+            model.on('change:components change:events', this.__onTemplateChange);
             addModelListeners(model, this);
         },
         beforeUnmount() {
@@ -97,12 +103,49 @@ export function createModelMixin(model, templateModel, parentView) {
                 templateModel.off('change:source_url', this.__onTemplateChange);
                 templateModel.off('change:esm_module', this.__onTemplateChange);
                 templateModel.off('change:esm_export', this.__onTemplateChange);
+                model.off('change:components change:events', this.__onTemplateChange);
                 this.__onTemplateChange = null;
             }
         },
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),
     });
+}
+
+function addTemplateOwner(templateModel) {
+    const owner = Vue.getCurrentInstance();
+    if (!owner || !owner.parent) {
+        return;
+    }
+    pruneTemplateOwners(templateModel).add(owner);
+}
+
+function pruneTemplateOwners(templateModel) {
+    const owners = templateOwners.get(templateModel) || new Set();
+    [...owners]
+        .filter(owner => owner.isUnmounted)
+        .forEach(owner => owners.delete(owner));
+    templateOwners.set(templateModel, owners);
+    return owners;
+}
+
+function forceUpdateOwner(owner) {
+    if (typeof owner.update === 'function') {
+        owner.update();
+    } else if (owner.proxy && typeof owner.proxy.$forceUpdate === 'function') {
+        owner.proxy.$forceUpdate();
+    }
+}
+
+function refreshTemplateOwners(templateModel, fallback) {
+    bumpTemplateRefreshVersion(templateModel);
+    const owners = pruneTemplateOwners(templateModel);
+    if (!owners.size) {
+        fallback();
+        return;
+    }
+    owners.forEach(forceUpdateOwner);
+    fallback();
 }
 
 function bumpTemplateRefreshVersion(templateModel) {
@@ -112,8 +155,12 @@ function bumpTemplateRefreshVersion(templateModel) {
     );
 }
 
+function templateRefreshTarget(model) {
+    return model.get('template') instanceof TemplateModel ? model.get('template') : model;
+}
+
 function templateRenderKey(model) {
-    const templateModel = model.get('template') instanceof TemplateModel ? model.get('template') : model;
+    const templateModel = templateRefreshTarget(model);
     return `${model.model_id}:${templateModel.model_id}:${templateRefreshVersions.get(templateModel) || 0}`;
 }
 
@@ -200,7 +247,9 @@ function createMethods(model, parentView) {
 function createInstanceComponents(components, parentView) {
     return components.reduce((result, [name, model]) => {
         // eslint-disable-next-line no-param-reassign
-        result[name] = createComponentObject(model, parentView);
+        result[name] = model instanceof VueTemplateModel
+            ? { render: () => vueTemplateRender(model, parentView) }
+            : createComponentObject(model, parentView);
         return result;
     }, {});
 }

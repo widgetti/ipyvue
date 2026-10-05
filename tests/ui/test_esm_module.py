@@ -248,6 +248,99 @@ def test_esm_module_code_change_rerenders_mounted_template(
     page_session.locator(".esm-hot >> text=v2").wait_for()
 
 
+def test_esm_module_code_change_rerenders_template_inside_vuetify(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    import ipyvuetify as v
+
+    _label_module("esm-vuetify-module", "inside v1", "esm-vuetify")
+
+    class Widget(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-vuetify-module", esm_export="Label")
+
+    display(v.Container(children=[Widget()]))
+    page_session.locator(".esm-vuetify >> text=inside v1").wait_for()
+    _label_module("esm-vuetify-module", "inside v2", "esm-vuetify")
+    page_session.locator(".esm-vuetify >> text=inside v2").wait_for()
+
+
+def test_esm_module_code_change_rerenders_instance_component(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    _label_module("esm-inner-instance-module", "inner v1", "esm-inner-instance")
+
+    class Inner(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-inner-instance-module",
+                esm_export="Label",
+            )
+
+    outer = vue.VueTemplate(
+        template="""
+        <template>
+            <inner></inner>
+        </template>
+        """,
+        components={"inner": Inner()},
+    )
+
+    display(outer)
+    page_session.locator(".esm-inner-instance >> text=inner v1").wait_for()
+    _label_module("esm-inner-instance-module", "inner v2", "esm-inner-instance")
+    page_session.locator(".esm-inner-instance >> text=inner v2").wait_for()
+
+
+def test_esm_components_change_rerenders_mounted_template(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-component-switch-module",
+        code="""
+        import { h } from "vue";
+
+        export const One = {
+            render() {
+                return h("div", { class: "esm-component-switch" }, "one");
+            },
+        };
+
+        export const Two = {
+            render() {
+                return h("div", { class: "esm-component-switch" }, "two");
+            },
+        };
+        """,
+    )
+
+    widget = vue.VueTemplate(
+        template="""
+        <template>
+            <switch-label></switch-label>
+        </template>
+        """,
+        components={
+            "switch-label": {
+                "esm_module": "esm-component-switch-module",
+                "esm_export": "One",
+            }
+        },
+    )
+
+    display(widget)
+    page_session.locator(".esm-component-switch >> text=one").wait_for()
+    widget.components = {
+        "switch-label": {
+            "esm_module": "esm-component-switch-module",
+            "esm_export": "Two",
+        }
+    }
+    page_session.locator(".esm-component-switch >> text=two").wait_for()
+
+
 def test_esm_export_change_rerenders_mounted_template(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -280,6 +373,130 @@ def test_esm_export_change_rerenders_mounted_template(
     page_session.locator(".esm-export >> text=one").wait_for()
     template.esm_export = "Two"
     page_session.locator(".esm-export >> text=two").wait_for()
+
+
+def test_late_esm_module_plugin_rerenders_precompiled_resolve_component(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-late-resolve-module",
+        code="""
+        import { h, resolveComponent } from "vue";
+
+        export const Page = {
+            render() {
+                const LateTag = resolveComponent("late-tag");
+                return h("div", { class: "esm-late-resolve" }, [h(LateTag)]);
+            },
+        };
+        """,
+    )
+
+    display(
+        vue.VueTemplate(
+            template=vue.Template(
+                esm_module="esm-late-resolve-module",
+                esm_export="Page",
+            )
+        )
+    )
+    page_session.locator("late-tag").wait_for(state="attached")
+
+    vue.define_module(
+        "esm-late-resolve-plugin",
+        code="""
+        import { h } from "vue";
+
+        await new Promise(resolve => { window.__releaseLateResolvePlugin = resolve; });
+
+        const LateTag = {
+            render() {
+                return h("span", { class: "esm-late-resolved" }, "late resolved");
+            },
+        };
+
+        export default {
+            install(app) {
+                app.component("late-tag", LateTag);
+            },
+        };
+        """,
+    )
+    page_session.wait_for_function("window.__releaseLateResolvePlugin !== undefined")
+    page_session.evaluate("window.__releaseLateResolvePlugin()")
+    page_session.locator(".esm-late-resolved >> text=late resolved").wait_for()
+
+
+def test_esm_module_dependency_change_retries_load(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    code = """
+    import { h } from "vue";
+
+    export const Label = {
+        render() {
+            return h("div", { class: "esm-dependency-retry" }, "dependency ready");
+        },
+    };
+    """
+
+    vue.define_module(
+        "esm-dependency-retry-module",
+        code=code,
+        dependencies=["never-defined"],
+    )
+
+    display(
+        vue.VueTemplate(
+            template=vue.Template(
+                esm_module="esm-dependency-retry-module",
+                esm_export="Label",
+            )
+        )
+    )
+    vue.define_module("esm-dependency-retry-module", code=code, dependencies=[])
+    page_session.locator(".esm-dependency-retry >> text=dependency ready").wait_for()
+
+
+def test_plugin_module_code_change_rerenders_named_export(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    def plugin_module(text):
+        vue.define_module(
+            "esm-plugin-page-module",
+            code=f"""
+            import {{ h }} from "vue";
+
+            export const Page = {{
+                render() {{
+                    return h("div", {{ class: "esm-plugin-page" }}, "{text}");
+                }},
+            }};
+
+            export default {{
+                install(app) {{
+                    app.component("plugin-page-extra", {{
+                        render() {{
+                            return h("div", "extra");
+                        }},
+                    }});
+                }},
+            }};
+            """,
+        )
+
+    plugin_module("plugin page v1")
+    display(
+        vue.VueTemplate(
+            template=vue.Template(
+                esm_module="esm-plugin-page-module",
+                esm_export="Page",
+            )
+        )
+    )
+    page_session.locator(".esm-plugin-page >> text=plugin page v1").wait_for()
+    plugin_module("plugin page v2")
+    page_session.locator(".esm-plugin-page >> text=plugin page v2").wait_for()
 
 
 @pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)

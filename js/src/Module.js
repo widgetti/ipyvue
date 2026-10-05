@@ -6,7 +6,11 @@ import {
     provideModule,
     requestModule,
 } from './esmVueTemplate';
-import { installModulePlugin, triggerTemplatesForModule } from './VueComponentModel';
+import {
+    installModulePlugin,
+    refreshAfterModulePluginInstall,
+    triggerTemplatesForModule,
+} from './VueComponentModel';
 
 const moduleGenerations = new Map();
 
@@ -42,7 +46,7 @@ export class ModuleModel extends WidgetModel {
         this.widget_manager = options && options.widget_manager;
         invalidateModule(this.get('name'));
         this.load();
-        this.on('change:code change:url', () => {
+        this.on('change:code change:url change:dependencies', () => {
             invalidateModule(this.get('name'));
             this.load();
         });
@@ -65,13 +69,24 @@ export class ModuleModel extends WidgetModel {
             if (!isCurrent() || module === undefined) {
                 return;
             }
+            let pluginComponentNames = null;
             const isPlugin = module.default && typeof module.default.install === 'function';
             if (isPlugin) {
-                await installModulePlugin(module.default, name, this.widget_manager);
+                pluginComponentNames = await installModulePlugin(module.default, name);
+            }
+            if (!isCurrent()) {
+                return;
             }
             const replacedModule = provideModule(name, module);
-            if (replacedModule && !isPlugin) {
-                await triggerTemplatesForModule(this.widget_manager, name);
+            try {
+                if (isPlugin) {
+                    await refreshAfterModulePluginInstall(this.widget_manager, pluginComponentNames);
+                }
+                if (replacedModule) {
+                    await triggerTemplatesForModule(this.widget_manager, name);
+                }
+            } catch (e) {
+                console.warn(`ipyvue: failed to refresh ES module "${name}"`, e);
             }
         } catch (e) {
             if (!isCurrent()) {
