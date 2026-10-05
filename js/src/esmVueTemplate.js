@@ -253,16 +253,21 @@ async function resolveModuleExport(moduleName, exportName) {
  * component's own options ride as mixins[0] so the ipyvue model mixin
  * (mixins[1], providing the Python traits as data and the event methods)
  * takes precedence over the component's own data() placeholders. */
-export function getEsmAsyncComponent(moduleName, exportName, mixin) {
-    return Vue.defineAsyncComponent(async () => {
-        const component = await resolveModuleExport(moduleName, exportName);
-        const { render, setup, __scopeId, ...rest } = component;
-        return {
-            ...(render && { render }),
-            ...(setup && { setup }),
-            ...(__scopeId && { __scopeId }),
-            mixins: [rest, mixin],
-        };
+export function getEsmAsyncComponent(moduleName, exportName, mixin, placeholder) {
+    return Vue.defineAsyncComponent({
+        loader: async () => {
+            const component = await resolveModuleExport(moduleName, exportName);
+            const { render, setup, __scopeId, ...rest } = component;
+            return {
+                ...(render && { render }),
+                ...(setup && { setup }),
+                ...(__scopeId && { __scopeId }),
+                mixins: [rest, mixin],
+            };
+        },
+        loadingComponent: placeholder,
+        errorComponent: placeholder,
+        delay: 0,
     });
 }
 

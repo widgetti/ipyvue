@@ -46,7 +46,10 @@ function createComponentObject(model, parentView) {
 
     const esmModule = templateModel.get('esm_module');
     if (esmModule) {
-        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), mixin);
+        /* Also shown while the module loads or after it failed, so a module
+         * fix or an esm_export change in that time still re-renders. */
+        const placeholder = { mixins: [createRefreshMixin(model, templateModel)], props: ['error'], render: () => null };
+        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), mixin, placeholder);
     }
 
     return getAsyncComponent(
@@ -63,20 +66,14 @@ function createComponentObject(model, parentView) {
 const templateEvents = 'change:template change:source_url change:esm_module change:esm_export';
 const componentEvents = 'change:components change:events';
 
-export function createModelMixin(model, templateModel, parentView) {
-    return ({
-        inject: ['viewCtx'],
-        data: () => {
-            return createDataMapping(model);
-        },
-        watch: createWatches(model, parentView),
+function createRefreshMixin(model, templateModel) {
+    return {
         created() {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
             templateModel.on(templateEvents, this.__onTemplateChange);
             model.on(componentEvents, this.__onTemplateChange);
-            addModelListeners(model, this);
         },
         beforeUnmount() {
             if (this.__onTemplateChange) {
@@ -84,6 +81,20 @@ export function createModelMixin(model, templateModel, parentView) {
                 model.off(componentEvents, this.__onTemplateChange);
                 this.__onTemplateChange = null;
             }
+        },
+    };
+}
+
+export function createModelMixin(model, templateModel, parentView) {
+    return ({
+        inject: ['viewCtx'],
+        mixins: [createRefreshMixin(model, templateModel)],
+        data: () => {
+            return createDataMapping(model);
+        },
+        watch: createWatches(model, parentView),
+        created() {
+            addModelListeners(model, this);
         },
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),

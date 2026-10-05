@@ -15,9 +15,13 @@ import ipyvue as vue
 def clean_module_registry():
     names = list(vue.esm._module_names)
     widgets = dict(vue.esm._module_widgets)
+    dependencies = dict(vue.esm._module_dependencies)
     vue.esm._module_names.clear()
     vue.esm._module_widgets.clear()
+    vue.esm._module_dependencies.clear()
     yield
+    vue.esm._module_dependencies.clear()
+    vue.esm._module_dependencies.update(dependencies)
     vue.esm._module_names[:] = names
     vue.esm._module_widgets.clear()
     vue.esm._module_widgets.update(widgets)
@@ -532,6 +536,53 @@ def test_esm_export_change_rerenders_mounted_template(
     page_session.locator(".esm-export >> text=one").wait_for()
     template.esm_export = "Two"
     page_session.locator(".esm-export >> text=two").wait_for()
+
+
+def test_esm_module_fixed_after_failed_import_renders(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-broken-module",
+        code="""
+        window.__esmBrokenLoaded = true;
+        throw new Error("broken on purpose");
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-broken-module", esm_export="Label")
+
+    display(Widget())
+    page_session.wait_for_function("window.__esmBrokenLoaded === true")
+    _label_module("esm-broken-module", "fixed", "esm-fixed")
+    page_session.locator(".esm-fixed >> text=fixed").wait_for()
+
+
+def test_late_esm_module_plugin_rerenders_html_tag(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    display(vue.Html(tag="late-html-card"))
+    page_session.locator("late-html-card").wait_for(state="attached")
+
+    vue.define_module(
+        "esm-late-html-plugin-module",
+        code="""
+        import { h } from "vue";
+
+        export default {
+            install(app) {
+                app.component("late-html-card", {
+                    render() {
+                        return h("div", { class: "esm-late-html" }, "late card loaded");
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.locator(".esm-late-html >> text=late card loaded").wait_for()
 
 
 def test_late_esm_module_plugin_rerenders_precompiled_resolve_component(

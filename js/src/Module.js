@@ -6,6 +6,7 @@ import {
     requestModule,
 } from './esmVueTemplate';
 import { installModulePlugin, refreshTemplates, usesTag } from './VueComponentModel';
+import { VueModel } from './VueModel';
 
 /* Per module name, so a slow load of old code cannot overwrite newer code. */
 const moduleGenerations = new Map();
@@ -65,8 +66,15 @@ export class ModuleModel extends WidgetModel {
                 refreshTemplates(this.widget_manager, (model, templateModel) => (
                     (replaced && usesModule(model, templateModel, name))
                     || (isPlugin && templateModel.get('esm_module'))
-                    || tags.some(tag => usesTag(templateModel.get('template'), tag))
+                    || tags.some(tag => [templateModel.get('template'), ...Object.values(model.get('components') || {})]
+                        .some(template => usesTag(template, tag)))
                 ));
+            }
+            if (tags.length) {
+                /* VueWidgets (e.g. Html(tag=...)) rendered before the plugin loaded */
+                Promise.all(Object.values(this.widget_manager._models)).then(models => models
+                    .filter(model => model instanceof VueModel && tags.some(tag => usesTag(`<${model.get('tag')}>`, tag)))
+                    .forEach(model => model.trigger('change:tag')));
             }
         } catch (e) {
             if (!isCurrent()) {
