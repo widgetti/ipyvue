@@ -1,6 +1,7 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel } from '@jupyter-widgets/base';
 import {TemplateModel} from './Template';
+import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import { jupyterWidgetComponent } from './VueTemplateRenderer';
 import {getAsyncComponent} from "./esmVueTemplate";
@@ -50,7 +51,7 @@ export async function refreshAfterModulePluginInstall(widget_manager, componentN
     const models = await allModels(widget_manager);
     triggerTemplateChanges(models
         .filter(model => model instanceof TemplateModel && model.get('esm_module')));
-    forceUpdateApps();
+    refreshPluginComponentInstances(componentNames);
 }
 
 function escapeRegExp(value) {
@@ -149,6 +150,72 @@ export async function triggerTemplatesForModule(widget_manager, moduleName) {
             .map(triggerTarget));
 
     triggerTemplateChanges(matches);
+    triggerVueModelChildrenChanges(models, moduleName);
+}
+
+function vueTemplateUsesModule(model, moduleName) {
+    return model instanceof VueTemplateModel
+        && (
+            model.get('template') instanceof TemplateModel
+                && model.get('template').get('esm_module') === moduleName
+            || usesEsmModuleInComponents(model, moduleName)
+        );
+}
+
+function vueModelChildrenUseModule(model, moduleName, seen = new Set()) {
+    if (!(model instanceof VueModel) || seen.has(model)) {
+        return false;
+    }
+    seen.add(model);
+    return (model.get('children') || []).some(child => vueTemplateUsesModule(child, moduleName)
+        || vueModelChildrenUseModule(child, moduleName, seen));
+}
+
+function triggerVueModelChildrenChanges(models, moduleName) {
+    models
+        .filter(model => vueModelChildrenUseModule(model, moduleName))
+        .forEach(model => model.trigger('change:children'));
+}
+
+function refreshPluginComponentInstances(componentNames) {
+    if (!componentNames.length) {
+        forceUpdateApps();
+        return;
+    }
+
+    const instances = new Set();
+    componentTagNames(componentNames).forEach((tagName) => {
+        Array.from(document.getElementsByTagName(tagName)).forEach((element) => {
+            const instance = vueParentComponentForElement(element);
+            if (instance) {
+                instances.add(instance);
+            }
+        });
+    });
+    instances.forEach(forceUpdateInstance);
+}
+
+function componentTagNames(componentNames) {
+    return [...new Set(componentNames.flatMap(name => [name, kebabCase(name)]))];
+}
+
+function vueParentComponentForElement(element) {
+    let current = element;
+    while (current) {
+        if (current.__vueParentComponent) {
+            return current.__vueParentComponent;
+        }
+        current = current.parentElement;
+    }
+    return null;
+}
+
+function forceUpdateInstance(instance) {
+    if (instance.proxy && typeof instance.proxy.$forceUpdate === 'function') {
+        instance.proxy.$forceUpdate();
+    } else if (typeof instance.update === 'function') {
+        instance.update();
+    }
 }
 
 function forceUpdateApps() {

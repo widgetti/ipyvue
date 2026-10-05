@@ -216,6 +216,58 @@ def test_late_esm_module_plugin_rerenders_existing_templates(
     page_session.locator(".esm-late-plugin >> text=late plugin loaded").wait_for()
 
 
+def test_late_esm_module_plugin_keeps_unrelated_local_state(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    local = vue.VueTemplate(
+        template="""
+        <template>
+            <input class="plugin-local" v-model="local" />
+        </template>
+        <script>
+            module.exports = {
+                data() {
+                    return { local: "" };
+                },
+            };
+        </script>
+        """,
+    )
+    waiting = vue.VueTemplate(
+        template="""
+        <template>
+            <state-plugin-card></state-plugin-card>
+        </template>
+        """,
+    )
+
+    display(local)
+    display(waiting)
+    page_session.locator("state-plugin-card").wait_for(state="attached")
+    page_session.locator(".plugin-local").fill("unsaved")
+
+    vue.define_module(
+        "esm-state-plugin-module",
+        code="""
+        import { h } from "vue";
+
+        const StatePluginCard = {
+            render() {
+                return h("div", { class: "esm-state-plugin" }, "plugin loaded");
+            },
+        };
+
+        export default {
+            install(app) {
+                app.component("StatePluginCard", StatePluginCard);
+            },
+        };
+        """,
+    )
+    page_session.locator(".esm-state-plugin >> text=plugin loaded").wait_for()
+    assert page_session.locator(".plugin-local").input_value() == "unsaved"
+
+
 def _label_module(name, text, css_class):
     vue.define_module(
         name,
@@ -266,6 +318,79 @@ def test_esm_module_code_change_rerenders_template_inside_vuetify(
     page_session.locator(".esm-vuetify >> text=inside v2").wait_for()
 
 
+def test_esm_module_code_change_rerenders_root_and_embedded_copy(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    import ipywidgets as widgets
+
+    _label_module("esm-root-and-embedded-module", "copy v1", "esm-copy")
+
+    class Widget(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-root-and-embedded-module",
+                esm_export="Label",
+            )
+
+    widget = Widget()
+    display(widget)
+    display(widgets.VBox([widget]))
+    page_session.wait_for_function(
+        "document.querySelectorAll('.esm-copy').length === 2"
+    )
+    page_session.wait_for_function(
+        "[...document.querySelectorAll('.esm-copy')]"
+        ".filter(el => el.textContent.includes('copy v1')).length === 2"
+    )
+
+    _label_module("esm-root-and-embedded-module", "copy v2", "esm-copy")
+    page_session.wait_for_function(
+        "[...document.querySelectorAll('.esm-copy')]"
+        ".filter(el => el.textContent.includes('copy v2')).length === 2"
+    )
+
+
+def test_esm_module_code_change_rerenders_root_and_jupyter_widget_copy(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    import ipywidgets as widgets
+
+    _label_module("esm-root-and-jupyter-widget-module", "widget v1", "esm-jupyter")
+
+    class Widget(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-root-and-jupyter-widget-module",
+                esm_export="Label",
+            )
+
+    class Parent(vue.VueTemplate):
+        child = traitlets.Any().tag(sync=True, **widgets.widget_serialization)
+        template = traitlets.Unicode(
+            """
+            <template>
+                <jupyter-widget :widget="child"></jupyter-widget>
+            </template>
+            """
+        ).tag(sync=True)
+
+    widget = Widget()
+    display(widget)
+    display(Parent(child=widget))
+    page_session.wait_for_function(
+        "[...document.querySelectorAll('.esm-jupyter')]"
+        ".filter(el => el.textContent.includes('widget v1')).length === 2"
+    )
+
+    _label_module("esm-root-and-jupyter-widget-module", "widget v2", "esm-jupyter")
+    page_session.wait_for_function(
+        "[...document.querySelectorAll('.esm-jupyter')]"
+        ".filter(el => el.textContent.includes('widget v2')).length === 2"
+    )
+
+
 def test_esm_module_code_change_rerenders_instance_component(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -292,6 +417,42 @@ def test_esm_module_code_change_rerenders_instance_component(
     page_session.locator(".esm-inner-instance >> text=inner v1").wait_for()
     _label_module("esm-inner-instance-module", "inner v2", "esm-inner-instance")
     page_session.locator(".esm-inner-instance >> text=inner v2").wait_for()
+
+
+def test_hidden_esm_instance_component_uses_latest_module(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    _label_module("esm-hidden-instance-module", "hidden v1", "esm-hidden")
+
+    class Child(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-hidden-instance-module",
+                esm_export="Label",
+            )
+
+    class Parent(vue.VueTemplate):
+        show = traitlets.Bool(True).tag(sync=True)
+
+    parent = Parent(
+        template="""
+        <template>
+            <div>
+                <child v-if="show"></child>
+            </div>
+        </template>
+        """,
+        components={"child": Child()},
+    )
+
+    display(parent)
+    page_session.locator(".esm-hidden >> text=hidden v1").wait_for()
+    parent.show = False
+    page_session.locator(".esm-hidden").wait_for(state="detached")
+    _label_module("esm-hidden-instance-module", "hidden v2", "esm-hidden")
+    parent.show = True
+    page_session.locator(".esm-hidden >> text=hidden v2").wait_for()
 
 
 def test_esm_instance_refresh_keeps_compiled_sibling_state(
