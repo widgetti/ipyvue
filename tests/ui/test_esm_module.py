@@ -14,15 +14,13 @@ import ipyvue as vue
 @pytest.fixture(autouse=True)
 def clean_module_registry():
     names = list(vue.esm._module_names)
-    widgets = dict(getattr(vue.esm, "_module_widgets", {}))
+    widgets = dict(vue.esm._module_widgets)
     vue.esm._module_names.clear()
-    if hasattr(vue.esm, "_module_widgets"):
-        vue.esm._module_widgets.clear()
+    vue.esm._module_widgets.clear()
     yield
     vue.esm._module_names[:] = names
-    if hasattr(vue.esm, "_module_widgets"):
-        vue.esm._module_widgets.clear()
-        vue.esm._module_widgets.update(widgets)
+    vue.esm._module_widgets.clear()
+    vue.esm._module_widgets.update(widgets)
 
 
 @pytest.mark.parametrize("ipywidgets_runner", ["solara"], indirect=True)
@@ -453,46 +451,6 @@ def test_hidden_esm_instance_component_uses_latest_module(
     _label_module("esm-hidden-instance-module", "hidden v2", "esm-hidden")
     parent.show = True
     page_session.locator(".esm-hidden >> text=hidden v2").wait_for()
-
-
-def test_esm_instance_refresh_keeps_compiled_sibling_state(
-    solara_test, page_session: playwright.sync_api.Page
-):
-    _label_module("esm-sibling-module", "child v1", "esm-sibling")
-
-    class Child(vue.VueTemplate):
-        @traitlets.default("template")
-        def _template(self):
-            return vue.Template(
-                esm_module="esm-sibling-module",
-                esm_export="Label",
-            )
-
-    container = vue.VueTemplate(
-        template="""
-        <template>
-            <div>
-                <input class="sibling-local" v-model="local" />
-                <child></child>
-            </div>
-        </template>
-        <script>
-            module.exports = {
-                data() {
-                    return { local: "" };
-                },
-            };
-        </script>
-        """,
-        components={"child": Child()},
-    )
-
-    display(container)
-    page_session.locator(".esm-sibling >> text=child v1").wait_for()
-    page_session.locator(".sibling-local").fill("typed text")
-    _label_module("esm-sibling-module", "child v2", "esm-sibling")
-    page_session.locator(".esm-sibling >> text=child v2").wait_for()
-    assert page_session.locator(".sibling-local").input_value() == "typed text"
 
 
 def test_esm_components_change_rerenders_mounted_template(

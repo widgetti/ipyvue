@@ -5,7 +5,7 @@ import {addApp, removeApp} from "./VueComponentModel";
 
 window.Vue = Vue;
 
-export function createViewContext(view, refreshRoot = undefined) {
+export function createViewContext(view) {
     return {
         getModelById(modelId) {
             return view.model.widget_manager.get_model(modelId);
@@ -14,7 +14,6 @@ export function createViewContext(view, refreshRoot = undefined) {
         getView() {
             return view;
         },
-        refreshRoot,
     };
 }
 
@@ -22,17 +21,12 @@ export class VueView extends DOMWidgetView {
     vueComponent() {
         const view = this;
         return {
+            provide: {
+                viewCtx: createViewContext(view),
+            },
             setup: () => {
                 view.onSetup();
-                const refreshRevision = Vue.ref(0);
-                view.refreshRoot = () => {
-                    refreshRevision.value += 1;
-                };
-                Vue.provide('viewCtx', createViewContext(view, view.refreshRoot));
-                return () => {
-                    refreshRevision.value;
-                    return vueRender(view.model, view, {});
-                };
+                return () => vueRender(view.model, view, {});
             },
         };
     }
@@ -44,7 +38,6 @@ export class VueView extends DOMWidgetView {
     remove() {
         this.vueApp.unmount();
         removeApp(this.vueApp);
-        this.refreshRoot = null;
         return super.remove();
     }
 

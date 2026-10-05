@@ -209,36 +209,17 @@ export function invalidateModule(name) {
     }
 }
 
-export async function loadModuleFromUrl(url, name, isCurrent = () => true) {
+/* Imports a module from a url, or from code when url is empty. Returns
+ * undefined when isCurrent() turns false, so a stale load cannot remap the name. */
+export async function loadModule(name, url, code, isCurrent) {
     await init();
-    if (!isCurrent()) {
-        return undefined;
-    }
-    addVueImportMap();
-    const module = await importShim(url);
-    if (!isCurrent()) {
-        return undefined;
-    }
-    try {
-        importShim.addImportMap({ imports: { [name]: url } });
-    } catch (e) {
-        console.warn(`ipyvue: could not (re)map import "${name}"`, e);
-    }
-    return module;
-}
-
-export async function loadModuleFromCode(code, name, isCurrent = () => true) {
-    await init();
-    if (!isCurrent()) {
-        return undefined;
-    }
     /* another library (e.g. ipyreact) may have replaced the importShim
      * global since init; re-add the vue mapping so this import resolves
      * against the shim that will actually run it (same refresh toModule
      * does for compiled SFCs) */
     addVueImportMap();
-    const url = toModuleUrl(withSourceURL(code, `ipyvue-module:///${name}.mjs`));
-    const module = await importShim(url);
+    const moduleUrl = url || toModuleUrl(withSourceURL(code, `ipyvue-module:///${name}.mjs`));
+    const module = await importShim(moduleUrl);
     if (!isCurrent()) {
         return undefined;
     }
@@ -247,7 +228,7 @@ export async function loadModuleFromCode(code, name, isCurrent = () => true) {
      * page); the named-module registry is the source of truth, so a failed
      * remap only means inter-module imports keep the previous version. */
     try {
-        importShim.addImportMap({ imports: { [name]: url } });
+        importShim.addImportMap({ imports: { [name]: moduleUrl } });
     } catch (e) {
         console.warn(`ipyvue: could not (re)map import "${name}" (stale inter-module imports until page reload)`, e);
     }
@@ -266,6 +247,7 @@ async function resolveModuleExport(moduleName, exportName) {
     }
     return component;
 }
+
 /* Component whose implementation comes from a precompiled ES module instead
  * of an in-browser compiled SFC. Mirrors compileSfc's output shape: the
  * component's own options ride as mixins[0] so the ipyvue model mixin

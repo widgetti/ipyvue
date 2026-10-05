@@ -8,24 +8,8 @@ import { VueTemplateModel } from './VueTemplateModel';
 import { TemplateModel } from './Template';
 import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVueTemplate";
 
-const templateRefreshVersions = new WeakMap();
-const templateOwners = new WeakMap();
-const templateComponentCache = new WeakMap();
-const templateModelsByTemplate = new WeakMap();
-const viewRootOwners = new WeakMap();
-const templateModelRefreshListeners = new WeakSet();
-const vueTemplateModelRefreshListeners = new WeakSet();
-const exposedMethodCache = new WeakMap();
-const defaultParentViewCacheKey = {};
-
 export function vueTemplateRender(model, parentView) {
-    if (model instanceof VueTemplateModel) {
-        ensureTemplateRefreshListeners(model);
-        addTemplateOwner(templateRefreshTarget(model), parentView);
-    }
-    return Vue.h(createComponentObject(model, parentView), {
-        key: templateRenderKey(model),
-    });
+    return Vue.h(createComponentObject(model, parentView));
 }
 
 function createComponentObject(model, parentView) {
@@ -43,7 +27,6 @@ function createComponentObject(model, parentView) {
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
     const template = templateModel.get('template');
-    ensureTemplateRefreshListeners(model);
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
@@ -51,36 +34,34 @@ function createComponentObject(model, parentView) {
     const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
 
+    const mixin = {
+        ...createModelMixin(model, templateModel, parentView),
+        components: {
+            ...createInstanceComponents(instanceComponents, parentView),
+            ...createClassComponents(classComponents, model, parentView),
+            ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
+        },
+    };
+
     const esmModule = templateModel.get('esm_module');
     if (esmModule) {
-        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), {
-            ...createModelMixin(model, templateModel, parentView),
-            components: {
-                ...createInstanceComponents(instanceComponents, parentView),
-                ...createClassComponents(classComponents, model, parentView),
-                ...createFullVueComponents(fullVueComponents),
-                ...createEsmComponents(esmComponents),
-            },
-        });
+        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), mixin);
     }
 
     return getAsyncComponent(
         template,
-        {
-            ...createModelMixin(model, templateModel, parentView),
-            components: {
-                ...createInstanceComponents(instanceComponents, parentView),
-                ...createClassComponents(classComponents, model, parentView),
-                ...createFullVueComponents(fullVueComponents),
-                ...createEsmComponents(esmComponents),
-            },
-        },
+        mixin,
         {
             styleOwnerKey: `template-${templateModel.model_id}`,
             sourceURL: templateModel.get('source_url') || `ipyvue-template-${templateModel.model_id}.vue`,
         }
     );
 }
+
+/* Changes that need a new component object; the root re-render creates it. */
+const templateEvents = 'change:template change:source_url change:esm_module change:esm_export';
+const componentEvents = 'change:components change:events';
 
 export function createModelMixin(model, templateModel, parentView) {
     return ({
@@ -90,202 +71,23 @@ export function createModelMixin(model, templateModel, parentView) {
         },
         watch: createWatches(model, parentView),
         created() {
-            if (typeof this.viewCtx.refreshRoot === 'function') {
-                this.__templateRootOwner = {
-                    update: () => this.viewCtx.refreshRoot(),
-                };
-                addTemplateOwnerInstance(templateModel, this.__templateRootOwner);
-            }
             this.__onTemplateChange = () => {
-                refreshTemplateOwners(templateModel, () => {
-                    if (typeof this.viewCtx.refreshRoot === 'function') {
-                        this.viewCtx.refreshRoot();
-                    } else {
-                        this.$root.$forceUpdate();
-                    }
-                });
+                this.$root.$forceUpdate();
             };
-            templateModel.on('change:template', this.__onTemplateChange);
-            templateModel.on('change:source_url', this.__onTemplateChange);
-            templateModel.on('change:esm_module', this.__onTemplateChange);
-            templateModel.on('change:esm_export', this.__onTemplateChange);
-            model.on('change:components change:events', this.__onTemplateChange);
+            templateModel.on(templateEvents, this.__onTemplateChange);
+            model.on(componentEvents, this.__onTemplateChange);
             addModelListeners(model, this);
         },
         beforeUnmount() {
-            removeTemplateOwner(templateModel, this.$);
-            if (this.__templateRootOwner) {
-                removeTemplateOwner(templateModel, this.__templateRootOwner);
-                this.__templateRootOwner = null;
-            }
             if (this.__onTemplateChange) {
-                templateModel.off('change:template', this.__onTemplateChange);
-                templateModel.off('change:source_url', this.__onTemplateChange);
-                templateModel.off('change:esm_module', this.__onTemplateChange);
-                templateModel.off('change:esm_export', this.__onTemplateChange);
-                model.off('change:components change:events', this.__onTemplateChange);
+                templateModel.off(templateEvents, this.__onTemplateChange);
+                model.off(componentEvents, this.__onTemplateChange);
                 this.__onTemplateChange = null;
             }
         },
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),
     });
-}
-
-function addTemplateOwner(templateModel, parentView) {
-    const owner = Vue.getCurrentInstance();
-    if (owner) {
-        addTemplateOwnerInstance(templateModel, owner);
-    }
-    const rootOwner = viewRootOwner(templateModel, parentView);
-    if (rootOwner) {
-        addTemplateOwnerInstance(templateModel, rootOwner);
-    }
-}
-
-function addTemplateOwnerInstance(templateModel, owner) {
-    pruneTemplateOwners(templateModel).add(owner);
-}
-
-function viewRootOwner(templateModel, parentView) {
-    if (!parentView || typeof parentView.refreshRoot !== 'function') {
-        return null;
-    }
-
-    let owners = viewRootOwners.get(parentView);
-    if (!owners) {
-        owners = new WeakMap();
-        viewRootOwners.set(parentView, owners);
-    }
-
-    let owner = owners.get(templateModel);
-    if (!owner) {
-        owner = {
-            update: () => parentView.refreshRoot(),
-        };
-        owners.set(templateModel, owner);
-    }
-    return owner;
-}
-
-function removeTemplateOwner(templateModel, owner) {
-    const owners = templateOwners.get(templateModel);
-    if (owners) {
-        owners.delete(owner);
-    }
-}
-
-function pruneTemplateOwners(templateModel) {
-    const owners = templateOwners.get(templateModel) || new Set();
-    [...owners]
-        .filter(owner => owner.isUnmounted)
-        .forEach(owner => owners.delete(owner));
-    templateOwners.set(templateModel, owners);
-    return owners;
-}
-
-function forceUpdateOwner(owner) {
-    if (owner.proxy && typeof owner.proxy.$forceUpdate === 'function') {
-        owner.proxy.$forceUpdate();
-    } else if (typeof owner.update === 'function') {
-        owner.update();
-    }
-}
-
-function refreshTemplateOwners(templateModel, fallback) {
-    refreshTemplateModelViews(templateModel);
-    const owners = pruneTemplateOwners(templateModel);
-    if (!owners.size) {
-        fallback();
-        return;
-    }
-    Array.from(owners).forEach(forceUpdateOwner);
-}
-
-function bumpTemplateRefreshVersion(templateModel) {
-    templateRefreshVersions.set(
-        templateModel,
-        (templateRefreshVersions.get(templateModel) || 0) + 1,
-    );
-}
-
-function templateRefreshTarget(model) {
-    return model.get('template') instanceof TemplateModel ? model.get('template') : model;
-}
-
-function ensureTemplateRefreshListeners(model) {
-    const templateModel = templateRefreshTarget(model);
-    let templateModels = templateModelsByTemplate.get(templateModel);
-    if (!templateModels) {
-        templateModels = new Set();
-        templateModelsByTemplate.set(templateModel, templateModels);
-    }
-    templateModels.add(model);
-
-    if (!templateModelRefreshListeners.has(templateModel)) {
-        const bumpVersion = () => bumpTemplateRefreshVersion(templateModel);
-        templateModel.on('change:template', bumpVersion);
-        templateModel.on('change:source_url', bumpVersion);
-        templateModel.on('change:esm_module', bumpVersion);
-        templateModel.on('change:esm_export', bumpVersion);
-        templateModelRefreshListeners.add(templateModel);
-    }
-
-    if (model instanceof VueTemplateModel && !vueTemplateModelRefreshListeners.has(model)) {
-        model.on('change:components change:events', () => bumpTemplateRefreshVersion(templateModel));
-        vueTemplateModelRefreshListeners.add(model);
-    }
-}
-
-function refreshTemplateModelViews(templateModel) {
-    const models = templateModelsByTemplate.get(templateModel);
-    if (!models) {
-        return;
-    }
-    models.forEach((model) => {
-        Object.values(model.views || {}).forEach((viewPromise) => {
-            Promise.resolve(viewPromise).then((view) => {
-                if (view && typeof view.refreshRoot === 'function') {
-                    view.refreshRoot();
-                }
-                if (view && view.vueApp && view.vueApp._instance
-                    && typeof view.vueApp._instance.update === 'function') {
-                    view.vueApp._instance.update();
-                }
-            });
-        });
-    });
-}
-
-function parentViewCacheKey(parentView) {
-    if (parentView && (typeof parentView === 'object' || typeof parentView === 'function')) {
-        return parentView;
-    }
-    return defaultParentViewCacheKey;
-}
-
-function cachedTemplateComponent(model, parentView) {
-    let parentCache = templateComponentCache.get(model);
-    if (!parentCache) {
-        parentCache = new WeakMap();
-        templateComponentCache.set(model, parentCache);
-    }
-
-    const cacheKey = parentViewCacheKey(parentView);
-    const renderKey = templateRenderKey(model);
-    const cached = parentCache.get(cacheKey);
-    if (cached && cached.renderKey === renderKey) {
-        return cached.component;
-    }
-
-    const component = createComponentObject(model, parentView);
-    parentCache.set(cacheKey, { renderKey, component });
-    return component;
-}
-
-export function templateRenderKey(model) {
-    const templateModel = templateRefreshTarget(model);
-    return `${model.model_id}:${templateModel.model_id}:${templateRefreshVersions.get(templateModel) || 0}`;
 }
 
 function createDataMapping(model) {
@@ -371,69 +173,9 @@ function createMethods(model, parentView) {
 function createInstanceComponents(components, parentView) {
     return components.reduce((result, [name, model]) => {
         // eslint-disable-next-line no-param-reassign
-        result[name] = model instanceof VueTemplateModel
-            ? createInstanceComponent(model, parentView)
-            : createComponentObject(model, parentView);
+        result[name] = createComponentObject(model, parentView);
         return result;
     }, {});
-}
-
-function createInstanceComponent(model, parentView) {
-    return {
-        inheritAttrs: false,
-        setup(props, { attrs, expose, slots }) {
-            const innerRef = Vue.ref(null);
-            ensureTemplateRefreshListeners(model);
-            expose(new Proxy({}, {
-                get(target, key) {
-                    const inner = innerRef.value;
-                    if (!inner) {
-                        return undefined;
-                    }
-                    const value = inner[key];
-                    return typeof value === 'function' ? boundExposedMethod(inner, key, value) : value;
-                },
-                set(target, key, value) {
-                    const inner = innerRef.value;
-                    if (!inner) {
-                        return true;
-                    }
-                    inner[key] = value;
-                    return true;
-                },
-                has(target, key) {
-                    return innerRef.value ? key in innerRef.value : false;
-                },
-            }));
-
-            return () => {
-                ensureTemplateRefreshListeners(model);
-                addTemplateOwner(templateRefreshTarget(model), parentView);
-                return Vue.h(
-                    cachedTemplateComponent(model, parentView),
-                    { ...attrs, key: templateRenderKey(model), ref: innerRef },
-                    slots,
-                );
-            };
-        },
-    };
-}
-
-function boundExposedMethod(inner, key, value) {
-    let methods = exposedMethodCache.get(inner);
-    if (!methods) {
-        methods = new Map();
-        exposedMethodCache.set(inner, methods);
-    }
-
-    const cached = methods.get(key);
-    if (cached && cached.value === value) {
-        return cached.bound;
-    }
-
-    const bound = value.bind(inner);
-    methods.set(key, { value, bound });
-    return bound;
 }
 
 function createClassComponents(components, containerModel, parentView) {
@@ -544,7 +286,6 @@ export function jupyterWidgetComponent() {
         data() {
             return {
                 component: null,
-                model: null,
             };
         },
         created() {
@@ -557,45 +298,14 @@ export function jupyterWidgetComponent() {
         },
         methods: {
             update() {
-                if (this.model instanceof VueTemplateModel && this.__templateRootOwner) {
-                    removeTemplateOwner(templateRefreshTarget(this.model), this.__templateRootOwner);
-                }
                 this.viewCtx
                     .getModelById(this.widget.substring(10))
                     .then((mdl) => {
-                        this.model = mdl;
-                        if (mdl instanceof VueTemplateModel && typeof this.viewCtx.refreshRoot === 'function') {
-                            this.__templateRootOwner = this.__templateRootOwner || {
-                                update: () => this.viewCtx.refreshRoot(),
-                            };
-                            addTemplateOwnerInstance(
-                                templateRefreshTarget(mdl),
-                                this.__templateRootOwner,
-                            );
-                        }
-                        this.component = mdl instanceof VueTemplateModel
-                            ? null
-                            : Vue.markRaw(createComponentObject(mdl, this.viewCtx.getView()));
+                        this.component = Vue.markRaw(createComponentObject(mdl, this.viewCtx.getView()));
                     });
             },
         },
-        beforeUnmount() {
-            if (this.model instanceof VueTemplateModel) {
-                removeTemplateOwner(templateRefreshTarget(this.model), this.$);
-                if (this.__templateRootOwner) {
-                    removeTemplateOwner(templateRefreshTarget(this.model), this.__templateRootOwner);
-                }
-            }
-        },
         render() {
-            if (this.model instanceof VueTemplateModel) {
-                ensureTemplateRefreshListeners(this.model);
-                addTemplateOwner(templateRefreshTarget(this.model), this.viewCtx.getView());
-                return Vue.h(
-                    cachedTemplateComponent(this.model, this.viewCtx.getView()),
-                    { key: templateRenderKey(this.model) },
-                );
-            }
             if (!this.component) {
                 return Vue.h('div');
             }
