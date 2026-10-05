@@ -55,6 +55,7 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 const affectedTemplateModels = models
                     .filter(model => model instanceof TemplateModel
+                        && model.get('template')
                         && affectedComponents.some(cname => model.get('template').match(re(cname))));
 
                 affectedTemplateModels.forEach(model => model.trigger('change:template'));

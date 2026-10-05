@@ -9,16 +9,23 @@ import traitlets
 from IPython.display import display
 
 import ipyvue as vue
+import ipyvue.esm as esm
 
 
 @pytest.fixture(autouse=True)
 def clean_module_registry():
     # define_module records module names process-wide (for dependency
     # ordering); tests each get a fresh page/kernel, so reset it
-    names = list(vue.esm._module_names)
-    vue.esm._module_names.clear()
+    names = list(esm._module_names)
+    widgets = dict(getattr(esm, "_module_widgets", {}))
+    esm._module_names.clear()
+    if hasattr(esm, "_module_widgets"):
+        esm._module_widgets.clear()
     yield
-    vue.esm._module_names[:] = names
+    esm._module_names[:] = names
+    if hasattr(esm, "_module_widgets"):
+        esm._module_widgets.clear()
+        esm._module_widgets.update(widgets)
 
 
 def test_esm_module_plugin_registers_components(
@@ -174,6 +181,44 @@ def test_esm_module_provided_after_request(
         """,
     )
     page_session.locator(".esm-late >> text=module defined late").wait_for()
+
+
+def test_esm_module_code_change_resolves_existing_waiter(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Widget(vue.VueTemplate):
+        label = traitlets.Unicode("hot").tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-hot-module", esm_export="Hello")
+
+    display(Widget())
+    page_session.locator("text=new code").wait_for(state="detached")
+
+    vue.define_module(
+        "esm-hot-module",
+        code="""
+        window.__ipyvueHotOldStarted = true;
+        await new Promise(() => {});
+
+        export const Hello = {
+            template: `<div class="esm-hot">old code {{ label }}</div>`,
+        };
+        """,
+    )
+    page_session.wait_for_function("window.__ipyvueHotOldStarted === true")
+
+    vue.define_module(
+        "esm-hot-module",
+        code="""
+        export const Hello = {
+            template: `<div class="esm-hot">new code {{ label }}</div>`,
+        };
+        """,
+    )
+
+    page_session.locator(".esm-hot >> text=new code hot").wait_for()
 
 
 def test_esm_module_as_template_implementation(
