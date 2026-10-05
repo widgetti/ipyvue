@@ -1,6 +1,7 @@
 /* eslint camelcase: off */
 import { DOMWidgetModel } from '@jupyter-widgets/base';
 import {TemplateModel} from './Template';
+import { VueTemplateModel } from './VueTemplateModel';
 import { jupyterWidgetComponent } from './VueTemplateRenderer';
 import {getAsyncComponent} from "./esmVueTemplate";
 import { version } from './version';
@@ -8,6 +9,7 @@ import { version } from './version';
 const apps = new Set();
 const appsWithBaseComponents = new WeakSet();
 const registeredComponentsByApp = new WeakMap();
+const modulePlugins = new Map();
 
 export function addApp(app, widget_manager) {
     apps.add(app);
@@ -16,8 +18,52 @@ export function addApp(app, widget_manager) {
         app.component('jupyter-widget', jupyterWidgetComponent());
         appsWithBaseComponents.add(app);
     }
+    modulePlugins.forEach(plugin => app.use(plugin));
 
     return syncComponentModels(app, widget_manager);
+}
+
+/* An ES module (see esm.py) whose default export is a vue plugin registers
+ * its own components: we app.use it on every app, current and future.
+ * app.use ignores repeated installs of the same plugin. Returns the names of
+ * the components the plugin (re)registered. */
+export function installModulePlugin(moduleName, plugin) {
+    modulePlugins.set(moduleName, plugin);
+    const componentNames = new Set();
+    apps.forEach((app) => {
+        const before = { ...app._context.components };
+        app.use(plugin);
+        Object.entries(app._context.components)
+            .filter(([name, component]) => before[name] !== component)
+            .forEach(([name]) => componentNames.add(name));
+    });
+    return [...componentNames];
+}
+
+function kebabCase(name) {
+    return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+function pascalCase(name) {
+    return name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+}
+
+/* Vue resolves a tag in kebab or Pascal case, whichever way it was registered. */
+export function usesTag(template, name) {
+    const names = [...new Set([name, kebabCase(name), pascalCase(name)])].join('|');
+    return typeof template === 'string' && new RegExp(`\\<(${names})[ />\n]`).test(template);
+}
+
+/* Re-renders every template that isAffected(model, templateModel) selects,
+ * through the same change:template path as a template hot reload. */
+export async function refreshTemplates(widget_manager, isAffected) {
+    const models = await Promise.all(Object.values(widget_manager._models));
+    new Set(models
+        .filter(model => model instanceof VueTemplateModel)
+        .map(model => [model, model.get('template') instanceof TemplateModel ? model.get('template') : model])
+        .filter(([model, templateModel]) => isAffected(model, templateModel))
+        .map(([, templateModel]) => templateModel))
+        .forEach(templateModel => templateModel.trigger('change:template'));
 }
 
 async function syncComponentModels(app, widget_manager) {
@@ -90,14 +136,10 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 const affectedComponents = [];
 
-                function re(searchName) {
-                    return new RegExp(`\\<${searchName}[ />\n]`, 'g');
-                }
-
                 function find_usage(searchName) {
                     affectedComponents.push(searchName);
                     componentModels
-                        .filter(model => model.get('component').match(re(searchName)))
+                        .filter(model => usesTag(model.get('component'), searchName))
                         .forEach((model) => {
                             const cname = model.get('name');
                             if (!affectedComponents.includes(cname)) {
@@ -108,11 +150,8 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 find_usage(name);
 
-                const affectedTemplateModels = models
-                    .filter(model => model instanceof TemplateModel
-                        && affectedComponents.some(cname => model.get('template').match(re(cname))));
-
-                affectedTemplateModels.forEach(model => model.trigger('change:template'));
+                refreshTemplates(widget_manager, (model, templateModel) => affectedComponents
+                    .some(cname => usesTag(templateModel.get('template'), cname)));
             })();
         });
         this.on('change:source_url', () => {

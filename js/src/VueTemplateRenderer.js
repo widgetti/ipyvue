@@ -6,7 +6,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import { TemplateModel } from './Template';
-import {getAsyncComponent} from "./esmVueTemplate";
+import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVueTemplate";
 
 export function vueTemplateRender(model, parentView) {
     return Vue.h(createComponentObject(model, parentView));
@@ -30,19 +30,31 @@ function createComponentObject(model, parentView) {
 
     const componentEntries = Object.entries(model.get('components') || {});
     const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !(v && v.esm_module));
+    const esmComponents = componentEntries.filter(([, v]) => v && v.esm_module);
     const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
+
+    const mixin = {
+        ...createModelMixin(model, templateModel, parentView),
+        components: {
+            ...createInstanceComponents(instanceComponents, parentView),
+            ...createClassComponents(classComponents, model, parentView),
+            ...createFullVueComponents(fullVueComponents),
+            ...createEsmComponents(esmComponents),
+        },
+    };
+
+    const esmModule = templateModel.get('esm_module');
+    if (esmModule) {
+        /* Also shown while the module loads or after it failed, so a module
+         * fix or an esm_export change in that time still re-renders. */
+        const placeholder = { mixins: [createRefreshMixin(model, templateModel)], props: ['error'], render: () => null };
+        return getEsmAsyncComponent(esmModule, templateModel.get('esm_export'), mixin, placeholder);
+    }
 
     return getAsyncComponent(
         template,
-        {
-            ...createModelMixin(model, templateModel, parentView),
-            components: {
-                ...createInstanceComponents(instanceComponents, parentView),
-                ...createClassComponents(classComponents, model, parentView),
-                ...createFullVueComponents(fullVueComponents),
-            },
-        },
+        mixin,
         {
             styleOwnerKey: `template-${templateModel.model_id}`,
             sourceURL: templateModel.get('source_url') || `ipyvue-template-${templateModel.model_id}.vue`,
@@ -50,27 +62,39 @@ function createComponentObject(model, parentView) {
     );
 }
 
+/* Changes that need a new component object; the root re-render creates it. */
+const templateEvents = 'change:template change:source_url change:esm_module change:esm_export';
+const componentEvents = 'change:components change:events';
+
+function createRefreshMixin(model, templateModel) {
+    return {
+        created() {
+            this.__onTemplateChange = () => {
+                this.$root.$forceUpdate();
+            };
+            templateModel.on(templateEvents, this.__onTemplateChange);
+            model.on(componentEvents, this.__onTemplateChange);
+        },
+        beforeUnmount() {
+            if (this.__onTemplateChange) {
+                templateModel.off(templateEvents, this.__onTemplateChange);
+                model.off(componentEvents, this.__onTemplateChange);
+                this.__onTemplateChange = null;
+            }
+        },
+    };
+}
+
 export function createModelMixin(model, templateModel, parentView) {
     return ({
         inject: ['viewCtx'],
+        mixins: [createRefreshMixin(model, templateModel)],
         data: () => {
             return createDataMapping(model);
         },
         watch: createWatches(model, parentView),
         created() {
-            this.__onTemplateChange = () => {
-                this.$root.$forceUpdate();
-            };
-            templateModel.on('change:template', this.__onTemplateChange);
-            templateModel.on('change:source_url', this.__onTemplateChange);
             addModelListeners(model, this);
-        },
-        beforeUnmount() {
-            if (this.__onTemplateChange) {
-                templateModel.off('change:template', this.__onTemplateChange);
-                templateModel.off('change:source_url', this.__onTemplateChange);
-                this.__onTemplateChange = null;
-            }
         },
         methods: createMethods(model, parentView),
         computed: aliasRefProps(model),
@@ -231,6 +255,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return Vue.h('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createEsmComponents(components) {
+    return components.reduce((accumulator, [componentName, spec]) => ({
+        ...accumulator,
+        [componentName]: getEsmComponent(spec.esm_module, spec.esm_export),
     }), {});
 }
 

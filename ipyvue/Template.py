@@ -76,6 +76,11 @@ class Template(Widget):
 
     template = Unicode(None, allow_none=True).tag(sync=True)
     source_url = Unicode(None, allow_none=True).tag(sync=True)
+    # When set, the component implementation comes from a precompiled ES
+    # module (see ipyvue.esm.define_module) instead of compiling `template`
+    # in the browser. `esm_export` selects the export (default: "default").
+    esm_module = Unicode(None, allow_none=True).tag(sync=True)
+    esm_export = Unicode(None, allow_none=True).tag(sync=True)
 
 
 __all__ = ["Template", "watch"]
