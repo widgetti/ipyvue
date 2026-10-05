@@ -130,6 +130,114 @@ def test_esm_module_late_plugin_refreshes_existing_template(
     page_session.locator(".esm-late-plugin-hello >> text=plugin late").wait_for()
 
 
+def test_esm_module_plugin_reload_refreshes_replaced_component(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-reload-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-reload-tag", {
+                    render(h) {
+                        return h("div", { class: "esm-reload-tag" }, "reload v1");
+                    },
+                });
+            },
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        template = traitlets.Unicode(
+            """
+            <template>
+                <esm-reload-tag></esm-reload-tag>
+            </template>
+            """
+        ).tag(sync=True)
+
+    display(Widget())
+    page_session.locator(".esm-reload-tag >> text=reload v1").wait_for()
+
+    vue.define_module(
+        "esm-reload-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-reload-tag", {
+                    render(h) {
+                        return h("div", { class: "esm-reload-tag" }, "reload v2");
+                    },
+                });
+                vueOrApp.component("esm-reload-extra-tag", {
+                    render(h) {
+                        return h("div", { class: "esm-reload-extra-tag" }, "extra");
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.locator(".esm-reload-tag >> text=reload v2").wait_for()
+
+
+def test_esm_module_late_plugin_refreshes_esm_template_export(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-late-tag-template-module",
+        code="""
+        export const Host = {
+            template: `<esm-late-tag name="esm"></esm-late-tag>`,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-late-tag-template-module", esm_export="Host"
+            )
+
+    display(Widget())
+    page_session.locator("esm-late-tag").wait_for(state="attached")
+
+    vue.define_module(
+        "esm-late-tag-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        await new Promise(resolve => { window.__releaseLateEsmTagPlugin = resolve; });
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("esm-late-tag", {
+                    props: { name: { type: String, required: true } },
+                    render(h) {
+                        return h(
+                            "div",
+                            { class: "esm-late-tag" },
+                            `late ${this.name}`,
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.wait_for_function(
+        "typeof window.__releaseLateEsmTagPlugin === 'function'"
+    )
+    page_session.evaluate("window.__releaseLateEsmTagPlugin()")
+    page_session.locator(".esm-late-tag >> text=late esm").wait_for()
+
+
 def test_esm_module_component_as_tag(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -348,6 +456,106 @@ def test_esm_template_export_change_refreshes_mounted_view(
 
     widget.template.esm_export = "Second"
     page_session.locator(".esm-export-refresh >> text=second export").wait_for()
+
+
+def test_esm_template_components_change_refreshes_mounted_view(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-components-host-module",
+        code="""
+        export const Host = {
+            template: `<swap-child></swap-child>`,
+        };
+        """,
+    )
+    vue.define_module(
+        "esm-components-child-module",
+        code="""
+        export const First = {
+            template: `<div class="esm-components-swap">first child</div>`,
+        };
+        export const Second = {
+            template: `<div class="esm-components-swap">second child</div>`,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        components = traitlets.Dict(
+            {
+                "swap-child": {
+                    "esm_module": "esm-components-child-module",
+                    "esm_export": "First",
+                }
+            }
+        ).tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-components-host-module", esm_export="Host"
+            )
+
+    widget = Widget()
+    display(widget)
+    page_session.locator(".esm-components-swap >> text=first child").wait_for()
+
+    widget.components = {
+        "swap-child": {
+            "esm_module": "esm-components-child-module",
+            "esm_export": "Second",
+        }
+    }
+    page_session.locator(".esm-components-swap >> text=second child").wait_for()
+
+
+def test_esm_template_esm_tag_module_reload_refreshes_mounted_view(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-parent-tag-module",
+        code="""
+        export const Host = {
+            template: `<lib-tag></lib-tag>`,
+        };
+        """,
+    )
+    vue.define_module(
+        "esm-lib-tag-module",
+        code="""
+        export const LibTag = {
+            template: `<div class="esm-lib-tag">lib v1</div>`,
+        };
+        """,
+    )
+
+    class Widget(vue.VueTemplate):
+        components = traitlets.Dict(
+            {
+                "lib-tag": {
+                    "esm_module": "esm-lib-tag-module",
+                    "esm_export": "LibTag",
+                }
+            }
+        ).tag(sync=True)
+
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(esm_module="esm-parent-tag-module", esm_export="Host")
+
+    display(Widget())
+    page_session.locator(".esm-lib-tag >> text=lib v1").wait_for()
+
+    vue.define_module(
+        "esm-lib-tag-module",
+        code="""
+        export const LibTag = {
+            template: `<div class="esm-lib-tag">lib v2</div>`,
+        };
+        """,
+    )
+    page_session.locator(".esm-lib-tag >> text=lib v2").wait_for()
 
 
 def test_esm_template_missing_export_does_not_break_sibling_then_recovers(

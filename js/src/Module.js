@@ -29,9 +29,13 @@ function componentRegistryNames() {
     return Object.keys(Vue.options.components || {});
 }
 
-function findNewComponentNames(beforeNames) {
-    const before = new Set(beforeNames);
-    return componentRegistryNames().filter(name => !before.has(name));
+function componentRegistrySnapshot() {
+    return { ...(Vue.options.components || {}) };
+}
+
+function findNewComponentNames(beforeComponents) {
+    const components = Vue.options.components || {};
+    return componentRegistryNames().filter(name => beforeComponents[name] !== components[name]);
 }
 
 /* Ships a precompiled ES module (see ipyvue.esm.define_module). A module
@@ -81,9 +85,9 @@ export class ModuleModel extends WidgetModel {
             }
             let pluginComponentNames = null;
             if (module.default && typeof module.default.install === 'function') {
-                const beforeComponentNames = componentRegistryNames();
+                const beforeComponents = componentRegistrySnapshot();
                 Vue.use(module.default);
-                pluginComponentNames = findNewComponentNames(beforeComponentNames);
+                pluginComponentNames = findNewComponentNames(beforeComponents);
             }
             const replacesExistingModule = provideModule(name, module);
             if (pluginComponentNames) {

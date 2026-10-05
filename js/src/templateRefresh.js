@@ -1,5 +1,33 @@
 import { TemplateModel } from './Template';
 import { VueTemplateModel } from './VueTemplateModel';
+import Vue from 'vue';
+
+const roots = new Set();
+
+Vue.mixin({
+    beforeCreate() {
+        if (this.$root === this) {
+            roots.add(this);
+        }
+    },
+    destroyed() {
+        if (this.$root === this) {
+            roots.delete(this);
+        }
+    },
+});
+
+function forceUpdateTree(vm) {
+    if (!vm || vm._isDestroyed) {
+        return;
+    }
+    vm.$forceUpdate();
+    Array.from(vm.$children || []).forEach(forceUpdateTree);
+}
+
+function forceUpdateRoots() {
+    Array.from(roots).forEach(forceUpdateTree);
+}
 
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -51,16 +79,22 @@ export async function triggerTemplateChangeForComponentTags(
     { fallbackAll = false } = {},
 ) {
     const models = await getWidgetModels(widgetManager);
-    const templateModels = models
+    const stringTemplateModels = models
         .filter(model => model instanceof TemplateModel || model instanceof VueTemplateModel)
         .filter(model => templateText(model));
+    const esmTemplateModels = models
+        .filter(model => model instanceof TemplateModel && model.get('esm_module'));
     const names = componentTagNames(componentNames);
     const affectedTemplateModels = names.length
-        ? templateModels.filter(model => names.some(name => templateText(model).match(componentTagRe(name))))
+        ? stringTemplateModels.filter(model => names.some(name => templateText(model).match(componentTagRe(name))))
         : [];
     triggerTemplateChange(
-        names.length || !fallbackAll ? affectedTemplateModels : templateModels,
+        [
+            ...(names.length || !fallbackAll ? affectedTemplateModels : stringTemplateModels),
+            ...esmTemplateModels,
+        ],
     );
+    forceUpdateRoots();
 }
 
 function templateTarget(model) {

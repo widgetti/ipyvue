@@ -27,6 +27,7 @@ function applyScopeId(vm, scopeId) {
 }
 
 const templateChangeEvents = 'change:template change:esm_module change:esm_export';
+const esmModelChangeEvents = 'change:components change:events';
 
 function scopeStyleElement(styleElt, scopeId) {
     const scopeSelector = `[${scopeId}]`;
@@ -256,10 +257,12 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
                 this.$root.$forceUpdate();
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
+            model.on(esmModelChangeEvents, this.__onTemplateChange);
             addModelListeners(model, this);
         },
         beforeDestroy() {
             templateModel.off(templateChangeEvents, this.__onTemplateChange);
+            model.off(esmModelChangeEvents, this.__onTemplateChange);
         },
         watch: createWatches(model, parentView, null),
         methods: createMethods(model, parentView),
@@ -301,6 +304,7 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
         exportName,
         components: model.get('components'),
         events: model.get('events'),
+        esmComponentModuleKeys: esmComponentModuleKeys(esmComponents),
     };
     if (!model.__esmComponentsByParentView) {
         // eslint-disable-next-line no-param-reassign
@@ -334,12 +338,14 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
                         this.$root.$forceUpdate();
                     };
                     templateModel.on(templateChangeEvents, this.__onTemplateChange);
+                    model.on(esmModelChangeEvents, this.__onTemplateChange);
                 },
                 render(h) {
                     return h(factory);
                 },
                 beforeDestroy() {
                     templateModel.off(templateChangeEvents, this.__onTemplateChange);
+                    model.off(esmModelChangeEvents, this.__onTemplateChange);
                 },
             };
             model.__esmComponentsByParentView.set(parentView, { key: cacheKey, component });
@@ -353,7 +359,30 @@ function esmComponentCacheKeysEqual(left, right) {
         && left.moduleName === right.moduleName
         && left.exportName === right.exportName
         && left.components === right.components
-        && left.events === right.events;
+        && left.events === right.events
+        && esmComponentModuleKeysEqual(left.esmComponentModuleKeys, right.esmComponentModuleKeys);
+}
+
+function esmComponentModuleKeys(components) {
+    return components.map(([componentName, spec]) => ({
+        componentName,
+        moduleName: spec.esm_module,
+        exportName: spec.esm_export,
+        moduleKey: getLoadedModule(spec.esm_module) || requestModule(spec.esm_module),
+    }));
+}
+
+function esmComponentModuleKeysEqual(left, right) {
+    if (!left || !right || left.length !== right.length) {
+        return false;
+    }
+    return left.every((leftKey, index) => {
+        const rightKey = right[index];
+        return leftKey.componentName === rightKey.componentName
+            && leftKey.moduleName === rightKey.moduleName
+            && leftKey.exportName === rightKey.exportName
+            && leftKey.moduleKey === rightKey.moduleKey;
+    });
 }
 
 function emptyComponent(templateModel) {
