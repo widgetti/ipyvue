@@ -60,7 +60,7 @@ export class ModuleModel extends WidgetModel {
         this.widgetManager = options['widget_manager'];
         invalidateModule(this.get('name'));
         this.load();
-        this.on('change:code change:url', () => {
+        this.on('change:code change:url change:dependencies', () => {
             invalidateModule(this.get('name'));
             this.load();
         });
