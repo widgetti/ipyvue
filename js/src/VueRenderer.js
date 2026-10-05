@@ -1,6 +1,6 @@
 /* eslint camelcase: ['error', {allow: ['v_model']}] */
 import * as base from '@jupyter-widgets/base';
-import { vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
+import { rerenderedByPlugins, vueTemplateRender } from './VueTemplateRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import Vue from './VueWithCompiler';
@@ -91,6 +91,7 @@ export function vueRender(createElement, model, parentView, slotScopes) {
     const tag = model.getVueTag();
 
     const elem = createElement({
+        mixins: [rerenderedByPlugins],
         data() {
             return {
                 v_model: model.get('v_model'),

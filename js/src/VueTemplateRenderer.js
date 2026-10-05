@@ -7,6 +7,7 @@ import { createObjectForNestedModel, eventToObject, vueRender } from './VueRende
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
+import { getEsmComponent, getModuleExport } from './esmModule';
 import { TemplateModel } from './Template';
 
 function normalizeScopeId(value) {
@@ -76,8 +77,29 @@ function scopeStyleElement(styleElt, scopeId) {
     }
 }
 
+/* Mounted template and widget components: a module plugin can register a
+ * tag after one of them rendered it as an unknown element, and vue2 only
+ * resolves tags on render. */
+const tagConsumers = new Set();
+
+export const rerenderedByPlugins = {
+    created() {
+        tagConsumers.add(this);
+    },
+    destroyed() {
+        tagConsumers.delete(this);
+    },
+};
+
+export function rerenderTemplates() {
+    tagConsumers.forEach(vm => vm.$forceUpdate());
+}
+
 export function vueTemplateRender(createElement, model, parentView) {
-    return createElement(createComponentObject(model, parentView));
+    const component = createComponentObject(model, parentView);
+    /* a functional template holder makes its parent read the module: wrap
+     * it, so a parent that caches its child vnodes cannot hide a reload */
+    return createElement(component.functional ? { render: h => h(component) } : component);
 }
 
 function createComponentObject(model, parentView) {
@@ -94,6 +116,9 @@ function createComponentObject(model, parentView) {
 
     const isTemplateModel = model.get('template') instanceof TemplateModel;
     const templateModel = isTemplateModel ? model.get('template') : model;
+    if (isTemplateModel && templateModel.get('esm_module')) {
+        return createTemplateHolder(model, templateModel, parentView);
+    }
     const template = templateModel.get('template');
     const sourceCodeFile = `VUE_TEMPLATE_SCRIPT_${model.cid}`;
     const vuefile = readVueFile(template, sourceCodeFile);
@@ -156,11 +181,6 @@ function createComponentObject(model, parentView) {
     // eslint-disable-next-line no-new-func
     const data = model.get('data') ? Function(`return ${model.get('data').replace('\n', ' ')}`)() : {};
 
-    const componentEntries = Object.entries(model.get('components') || {});
-    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
-    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string'));
-    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
-
     function callVueFn(name, this_) {
         if (vuefile.SCRIPT && vuefile.SCRIPT[name]) {
             vuefile.SCRIPT[name].bind(this_)();
@@ -169,6 +189,7 @@ function createComponentObject(model, parentView) {
 
     return {
         inject: ['viewCtx'],
+        mixins: [rerenderedByPlugins],
         data() {
             // data that is only used in the template, and not synced with the backend/model
             const dataTemplate = (vuefile.SCRIPT && vuefile.SCRIPT.data && vuefile.SCRIPT.data()) || {};
@@ -181,7 +202,8 @@ function createComponentObject(model, parentView) {
             this.__onTemplateChange = () => {
                 this.$root.$forceUpdate();
             };
-            templateModel.on('change:template', this.__onTemplateChange);
+            /* a new esm_module re-renders through the ES module holder */
+            templateModel.on('change:template change:esm_module', this.__onTemplateChange);
             addModelListeners(model, this);
             callVueFn('created', this);
         },
@@ -191,11 +213,7 @@ function createComponentObject(model, parentView) {
             ...methods,
             ...createMethods(model, parentView),
         },
-        components: {
-            ...createInstanceComponents(instanceComponents, parentView),
-            ...createClassComponents(classComponents, model, parentView),
-            ...createFullVueComponents(fullVueComponents),
-        },
+        components: createComponents(model, parentView),
         computed: { ...vuefile.SCRIPT && vuefile.SCRIPT.computed, ...aliasRefProps(model) },
         template: vuefile.TEMPLATE === undefined && vuefile.SCRIPT === undefined && vuefile.STYLE === undefined
             ? template
@@ -216,12 +234,109 @@ function createComponentObject(model, parentView) {
             callVueFn('updated', this);
         },
         beforeDestroy() {
-            templateModel.off('change:template', this.__onTemplateChange);
+            templateModel.off('change:template change:esm_module', this.__onTemplateChange);
+            model.off(null, null, this);
             callVueFn('beforeDestroy', this);
         },
         destroyed() {
             callVueFn('destroyed', this);
         },
+    };
+}
+
+/* A Template's precompiled ES module export (see ipyvue.esm.define_module
+ * and Template.esm_module), picked per render. Functional, so refs, events
+ * and slots reach the export; the parent render reads the module and the
+ * model's version, so it renders the new implementation after a change. */
+function createTemplateHolder(model, templateModel, parentView) {
+    let esm = {};
+    let compiled = {};
+    return {
+        functional: true,
+        render(h, { data, children }) {
+            const version = implementationVersion(model, templateModel);
+            const moduleName = templateModel.get('esm_module');
+            if (!moduleName) {
+                /* esm_module was unset: render the current compiled template,
+                 * rebuilt only when its source changes so it keeps its state */
+                const template = templateModel.get('template');
+                if (compiled.template !== template) {
+                    compiled = { template, object: createComponentObject(model, parentView) };
+                }
+                return h(compiled.object, data, children);
+            }
+            const component = getModuleExport(moduleName, templateModel.get('esm_export'));
+            if (!component) {
+                return h();
+            }
+            if (esm.component !== component || esm.version !== version) {
+                const object = createEsmTemplateObject(model, component, parentView);
+                esm = { component, version, object };
+            }
+            return h(esm.object, data, children);
+        },
+    };
+}
+
+/* One reactive version per model, bumped when its ES module implementation
+ * inputs change; per model, so listeners do not pile up per render. */
+const implementationVersions = new WeakMap();
+
+function implementationVersion(model, templateModel) {
+    if (!implementationVersions.has(model)) {
+        const cell = Vue.observable({ version: 0 });
+        const bump = () => {
+            cell.version += 1;
+        };
+        model.listenTo(templateModel, 'change:esm_module change:esm_export', bump);
+        model.on('change:components change:events', bump);
+        implementationVersions.set(model, cell);
+    }
+    return implementationVersions.get(model).version;
+}
+
+/* The export's options ride as mixins[0] under the model mixin: vue merges
+ * mixins in order, so model traits override the script's data()
+ * placeholders and injected event handlers override method stubs - the same
+ * precedence as the in-browser compiled path. */
+function createEsmTemplateObject(model, component, parentView) {
+    /* template-form components get their state as data (for the two-way
+     * model sync); vue2 lets a props declaration (e.g. written for type
+     * checkers) shadow that data, so ignore it like the compiled-template
+     * path does */
+    const { props, ...withoutProps } = component;
+    const modelMixin = {
+        inject: ['viewCtx'],
+        mixins: [rerenderedByPlugins],
+        data() {
+            return createDataMapping(model);
+        },
+        created() {
+            addModelListeners(model, this);
+        },
+        beforeDestroy() {
+            model.off(null, null, this);
+        },
+        watch: createWatches(model, parentView, null),
+        methods: createMethods(model, parentView),
+        components: createComponents(model, parentView),
+        computed: aliasRefProps(model),
+    };
+    return { mixins: [withoutProps, modelMixin] };
+}
+
+function createComponents(model, parentView) {
+    const componentEntries = Object.entries(model.get('components') || {});
+    const isEsm = v => v && v.esm_module;
+    const instanceComponents = componentEntries.filter(([, v]) => v instanceof WidgetModel);
+    const esmComponents = componentEntries.filter(([, v]) => isEsm(v));
+    const classComponents = componentEntries.filter(([, v]) => !(v instanceof WidgetModel) && !(typeof v === 'string') && !isEsm(v));
+    const fullVueComponents = componentEntries.filter(([, v]) => typeof v === 'string');
+    return {
+        ...createInstanceComponents(instanceComponents, parentView),
+        ...createClassComponents(classComponents, model, parentView),
+        ...createFullVueComponents(fullVueComponents),
+        ...createEsmComponents(esmComponents),
     };
 }
 
@@ -245,7 +360,7 @@ function addModelListeners(model, vueModel) {
                 return;
             }
             vueModel[prop] = _.cloneDeep(model.get(prop));
-        }));
+        }, vueModel));
     model.on('msg:custom', (content, buffers) => {
         if (!content['method']) {
             return;
@@ -259,7 +374,7 @@ function addModelListeners(model, vueModel) {
             args_ = []
         }
         vueModel[jupyter_method](...args_, buffers);
-    });
+    }, vueModel);
 }
 
 /* vue allows function, {handler, ...}, method-name string and array watchers */
@@ -398,6 +513,13 @@ function createClassComponents(components, containerModel, parentView) {
                 return createElement('div', ['temp-content']);
             },
         }),
+    }), {});
+}
+
+function createEsmComponents(components) {
+    return components.reduce((accumulator, [componentName, spec]) => ({
+        ...accumulator,
+        [componentName]: getEsmComponent(spec.esm_module, spec.esm_export),
     }), {});
 }
 

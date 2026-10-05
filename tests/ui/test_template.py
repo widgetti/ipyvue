@@ -72,6 +72,64 @@ def test_template_custom_event(solara_test, page_session: playwright.sync_api.Pa
     assert last_event_data == "not-an-event-object"
 
 
+def test_vue_template_component_forwards_events_refs_and_slots(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Child(vue.VueTemplate):
+        template = Unicode(
+            """
+            <template>
+                <button class="component-child" @click="$emit('picked')">
+                    <slot></slot>
+                </button>
+            </template>
+            <script>
+                module.exports = {
+                    methods: {
+                        childMethod() {
+                            return "child ref worked";
+                        }
+                    }
+                }
+            </script>
+            """
+        ).tag(sync=True)
+
+    class Parent(vue.VueTemplate):
+        status = Unicode("waiting").tag(sync=True)
+
+    child = Child()
+    parent = Parent(
+        template="""
+        <template>
+            <div>
+                <child @picked="onPick" ref="c">slot text</child>
+                <button class="component-ref" @click="callChild">call child</button>
+                <span class="component-status">{{status}}</span>
+            </div>
+        </template>
+        """,
+        methods="""
+        {
+            onPick() {
+                this.status = "picked";
+            },
+            callChild() {
+                this.status = this.$refs.c.childMethod();
+            }
+        }
+        """,
+        components={"child": child},
+    )
+
+    display(parent)
+    page_session.locator(".component-child >> text=slot text").wait_for()
+    page_session.locator(".component-child").click()
+    page_session.locator(".component-status >> text=picked").wait_for()
+    page_session.locator(".component-ref").click()
+    page_session.locator(".component-status >> text=child ref worked").wait_for()
+
+
 class MyTemplateScript(vue.VueTemplate):
     clicks = Int(0).tag(sync=True)
 
