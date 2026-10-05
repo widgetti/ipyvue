@@ -294,6 +294,46 @@ def test_esm_module_code_change_rerenders_instance_component(
     page_session.locator(".esm-inner-instance >> text=inner v2").wait_for()
 
 
+def test_esm_instance_refresh_keeps_compiled_sibling_state(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    _label_module("esm-sibling-module", "child v1", "esm-sibling")
+
+    class Child(vue.VueTemplate):
+        @traitlets.default("template")
+        def _template(self):
+            return vue.Template(
+                esm_module="esm-sibling-module",
+                esm_export="Label",
+            )
+
+    container = vue.VueTemplate(
+        template="""
+        <template>
+            <div>
+                <input class="sibling-local" v-model="local" />
+                <child></child>
+            </div>
+        </template>
+        <script>
+            module.exports = {
+                data() {
+                    return { local: "" };
+                },
+            };
+        </script>
+        """,
+        components={"child": Child()},
+    )
+
+    display(container)
+    page_session.locator(".esm-sibling >> text=child v1").wait_for()
+    page_session.locator(".sibling-local").fill("typed text")
+    _label_module("esm-sibling-module", "child v2", "esm-sibling")
+    page_session.locator(".esm-sibling >> text=child v2").wait_for()
+    assert page_session.locator(".sibling-local").input_value() == "typed text"
+
+
 def test_esm_components_change_rerenders_mounted_template(
     solara_test, page_session: playwright.sync_api.Page
 ):

@@ -10,6 +10,8 @@ import {getAsyncComponent, getEsmAsyncComponent, getEsmComponent} from "./esmVue
 
 const templateRefreshVersions = new WeakMap();
 const templateOwners = new WeakMap();
+const templateComponentCache = new WeakMap();
+const defaultParentViewCacheKey = {};
 
 export function vueTemplateRender(model, parentView) {
     if (model instanceof VueTemplateModel) {
@@ -158,6 +160,32 @@ function templateRefreshTarget(model) {
     return model.get('template') instanceof TemplateModel ? model.get('template') : model;
 }
 
+function parentViewCacheKey(parentView) {
+    if (parentView && (typeof parentView === 'object' || typeof parentView === 'function')) {
+        return parentView;
+    }
+    return defaultParentViewCacheKey;
+}
+
+function cachedTemplateComponent(model, parentView) {
+    let parentCache = templateComponentCache.get(model);
+    if (!parentCache) {
+        parentCache = new WeakMap();
+        templateComponentCache.set(model, parentCache);
+    }
+
+    const cacheKey = parentViewCacheKey(parentView);
+    const renderKey = templateRenderKey(model);
+    const cached = parentCache.get(cacheKey);
+    if (cached && cached.renderKey === renderKey) {
+        return cached.component;
+    }
+
+    const component = createComponentObject(model, parentView);
+    parentCache.set(cacheKey, { renderKey, component });
+    return component;
+}
+
 export function templateRenderKey(model) {
     const templateModel = templateRefreshTarget(model);
     return `${model.model_id}:${templateModel.model_id}:${templateRefreshVersions.get(templateModel) || 0}`;
@@ -247,10 +275,49 @@ function createInstanceComponents(components, parentView) {
     return components.reduce((result, [name, model]) => {
         // eslint-disable-next-line no-param-reassign
         result[name] = model instanceof VueTemplateModel
-            ? { render: () => vueTemplateRender(model, parentView) }
+            ? createInstanceComponent(model, parentView)
             : createComponentObject(model, parentView);
         return result;
     }, {});
+}
+
+function createInstanceComponent(model, parentView) {
+    return {
+        inheritAttrs: false,
+        setup(props, { attrs, expose, slots }) {
+            const innerRef = Vue.ref(null);
+            expose(new Proxy({}, {
+                get(target, key) {
+                    const inner = innerRef.value;
+                    if (!inner) {
+                        return undefined;
+                    }
+                    const value = inner[key];
+                    return typeof value === 'function' ? value.bind(inner) : value;
+                },
+                set(target, key, value) {
+                    const inner = innerRef.value;
+                    if (!inner) {
+                        return false;
+                    }
+                    inner[key] = value;
+                    return true;
+                },
+                has(target, key) {
+                    return innerRef.value ? key in innerRef.value : false;
+                },
+            }));
+
+            return () => {
+                addTemplateOwner(templateRefreshTarget(model));
+                return Vue.h(
+                    cachedTemplateComponent(model, parentView),
+                    { ...attrs, key: templateRenderKey(model), ref: innerRef },
+                    slots,
+                );
+            };
+        },
+    };
 }
 
 function createClassComponents(components, containerModel, parentView) {

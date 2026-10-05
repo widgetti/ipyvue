@@ -269,3 +269,91 @@ def test_template_scoped_style(
     )
     assert scoped_color == "rgb(255, 0, 0)"
     assert unscoped_color != "rgb(255, 0, 0)"
+
+
+def test_template_component_forwards_slots_and_events(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Child(vue.VueTemplate):
+        template = Unicode(
+            """
+            <template>
+                <button class="child-pick" @click="$emit('picked', 'picked')">
+                    <slot></slot>
+                </button>
+            </template>
+            """
+        ).tag(sync=True)
+
+    class Parent(vue.VueTemplate):
+        picked = Unicode("waiting").tag(sync=True)
+        template = Unicode(
+            """
+            <template>
+                <div>
+                    <child @picked="on_pick">slot text</child>
+                    <span class="picked">{{ picked }}</span>
+                </div>
+            </template>
+            """
+        ).tag(sync=True)
+
+        def __init__(self, **kwargs):
+            super().__init__(components={"child": Child(events=[])}, **kwargs)
+
+        def vue_on_pick(self, value):
+            self.picked = value
+
+    display(Parent())
+    page_session.locator(".child-pick >> text=slot text").wait_for()
+    page_session.locator(".child-pick").click()
+    page_session.locator(".picked >> text=picked").wait_for()
+
+
+def test_template_component_keeps_child_state_after_parent_rerender(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Child(vue.VueTemplate):
+        template = Unicode(
+            """
+            <template>
+                <button class="child-state" @click="local += 1">
+                    child {{ local }}
+                </button>
+            </template>
+            <script>
+                module.exports = {
+                    data() {
+                        return { local: 0 };
+                    },
+                };
+            </script>
+            """
+        ).tag(sync=True)
+
+    class Parent(vue.VueTemplate):
+        count = Int(0).tag(sync=True)
+        template = Unicode(
+            """
+            <template>
+                <div>
+                    <span class="parent-count">parent {{ count }}</span>
+                    <child :data-count="count"></child>
+                </div>
+            </template>
+            """
+        ).tag(sync=True)
+
+        def __init__(self, **kwargs):
+            super().__init__(components={"child": Child()}, **kwargs)
+
+    parent = Parent()
+    display(parent)
+    child = page_session.locator(".child-state")
+    child.wait_for()
+    child.click()
+    page_session.locator(".child-state >> text=child 1").wait_for()
+
+    parent.count = 1
+    page_session.locator(".parent-count >> text=parent 1").wait_for()
+    page_session.locator(".child-state >> text=child 1").wait_for()
