@@ -9,6 +9,7 @@ import {
     requestModule,
 } from './esmModule';
 import {
+    forceUpdateReplacedComponentInstances,
     triggerTemplateChangeForComponentTags,
     triggerTemplateChangeForEsmModule,
 } from './templateRefresh';
@@ -38,6 +39,13 @@ function findNewComponentNames(beforeComponents) {
     return componentRegistryNames().filter(name => beforeComponents[name] !== components[name]);
 }
 
+function findReplacedComponents(beforeComponents) {
+    const components = Vue.options.components || {};
+    return componentRegistryNames()
+        .filter(name => beforeComponents[name] && beforeComponents[name] !== components[name])
+        .map(name => ({ name, component: beforeComponents[name] }));
+}
+
 /* Ships a precompiled ES module (see ipyvue.esm.define_module). A module
  * whose default export is a plain vue plugin ({ install }) registers its
  * own components: vue2 has a global registry, so Vue.use is all we need. */
@@ -57,7 +65,7 @@ export class ModuleModel extends WidgetModel {
 
     initialize(attributes, options) {
         super.initialize(attributes, options);
-        this.widgetManager = options['widget_manager'];
+        this.widgetManager = options.widget_manager;
         invalidateModule(this.get('name'));
         this.load();
         this.on('change:code change:url change:dependencies', () => {
@@ -84,10 +92,12 @@ export class ModuleModel extends WidgetModel {
                 return;
             }
             let pluginComponentNames = null;
+            let replacedComponents = null;
             if (module.default && typeof module.default.install === 'function') {
                 const beforeComponents = componentRegistrySnapshot();
                 Vue.use(module.default);
                 pluginComponentNames = findNewComponentNames(beforeComponents);
+                replacedComponents = findReplacedComponents(beforeComponents);
             }
             const replacesExistingModule = provideModule(name, module);
             if (pluginComponentNames) {
@@ -99,6 +109,16 @@ export class ModuleModel extends WidgetModel {
                     );
                 } catch (refreshError) {
                     console.warn(`ipyvue: could not refresh templates for ES module plugin "${name}"`, refreshError);
+                }
+            }
+            if (replacedComponents) {
+                try {
+                    forceUpdateReplacedComponentInstances(replacedComponents);
+                } catch (refreshError) {
+                    console.warn(
+                        `ipyvue: could not refresh replaced components for ES module plugin "${name}"`,
+                        refreshError,
+                    );
                 }
             }
             if (replacesExistingModule) {

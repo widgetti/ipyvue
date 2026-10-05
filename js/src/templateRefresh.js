@@ -1,6 +1,6 @@
+import Vue from 'vue';
 import { TemplateModel } from './Template';
 import { VueTemplateModel } from './VueTemplateModel';
-import Vue from 'vue';
 
 const roots = new Set();
 
@@ -53,6 +53,7 @@ function deleteChildCachePath(target, pathCids) {
         return;
     }
     pathCids.forEach((cid) => {
+        // eslint-disable-next-line no-param-reassign
         delete target.childCache[cid];
     });
     if (target.childIds) {
@@ -76,19 +77,138 @@ function forceUpdateInstance(vm) {
     if (!vm || vm._isDestroyed) {
         return;
     }
+    const targets = new Set([vm]);
+    const renderContext = vm.$vnode && vm.$vnode.context;
+    if (renderContext && !renderContext._isDestroyed) {
+        targets.add(renderContext);
+    }
+    targets.forEach(forceUpdateSingleInstance);
+}
+
+function forceUpdateSingleInstance(vm) {
+    if (!vm || vm._isDestroyed) {
+        return;
+    }
     deleteChildCachePath(vm, collectRefreshCids(vm));
     vm.$forceUpdate();
+}
+
+function vnodeChildren(vnode) {
+    if (!vnode) {
+        return [];
+    }
+    const children = Array.isArray(vnode.children) ? vnode.children : [];
+    const componentChildren = vnode.componentOptions
+        && Array.isArray(vnode.componentOptions.children)
+        ? vnode.componentOptions.children
+        : [];
+    return [...children, ...componentChildren];
+}
+
+function vnodeContainsElementFromContext(vnode, element, context) {
+    if (!vnode) {
+        return false;
+    }
+    if (vnode.elm === element && vnode.context === context) {
+        return true;
+    }
+    return vnodeChildren(vnode)
+        .some(child => vnodeContainsElementFromContext(child, element, context));
+}
+
+function renderContextForElement(vm, element) {
+    let current = vm;
+    while (current && !current._isDestroyed) {
+        if (vnodeContainsElementFromContext(current._vnode, element, current)) {
+            return current;
+        }
+        current = current.$parent;
+    }
+    return null;
 }
 
 function forceUpdateComponentTags(names) {
     const instances = new Set();
     names.forEach((name) => {
-        Array.from(document.getElementsByTagName(name))
-            .map(nearestVueInstance)
-            .filter(vm => vm && !vm._isDestroyed)
-            .forEach(vm => instances.add(vm));
+        Array.from(document.getElementsByTagName(name)).forEach((element) => {
+            const vm = nearestVueInstance(element);
+            if (vm && !vm._isDestroyed) {
+                instances.add(vm);
+                const renderContext = renderContextForElement(vm, element);
+                if (renderContext) {
+                    instances.add(renderContext);
+                }
+            }
+        });
     });
     instances.forEach(forceUpdateInstance);
+}
+
+function componentOptions(component) {
+    return component && component.options ? component.options : component;
+}
+
+function componentCtorCandidates(vm) {
+    const candidates = [vm.constructor];
+    if (vm.$vnode && vm.$vnode.componentOptions && vm.$vnode.componentOptions.Ctor) {
+        candidates.push(vm.$vnode.componentOptions.Ctor);
+    }
+    if (vm.$options) {
+        candidates.push(vm.$options);
+        if (vm.$options._Ctor) {
+            if (typeof vm.$options._Ctor === 'function') {
+                candidates.push(vm.$options._Ctor);
+            } else {
+                candidates.push(...Object.values(vm.$options._Ctor));
+            }
+        }
+    }
+    return candidates;
+}
+
+function componentMatches(candidate, component) {
+    const options = componentOptions(component);
+    return Boolean(
+        candidate
+        && component
+        && (
+            candidate === component
+            || candidate === options
+            || componentOptions(candidate) === options
+        ),
+    );
+}
+
+function vmMatchesComponent(vm, component) {
+    return componentCtorCandidates(vm)
+        .some(candidate => componentMatches(candidate, component));
+}
+
+function walkInstanceTree(vm, visit) {
+    if (!vm || vm._isDestroyed) {
+        return;
+    }
+    visit(vm);
+    Array.from(vm.$children || [])
+        .forEach(child => walkInstanceTree(child, visit));
+}
+
+export function forceUpdateReplacedComponentInstances(replacedComponents) {
+    if (!replacedComponents || !replacedComponents.length) {
+        return;
+    }
+    const contexts = new Set();
+    Array.from(roots).forEach((root) => {
+        walkInstanceTree(root, (vm) => {
+            if (replacedComponents.some(({ component }) => vmMatchesComponent(vm, component))) {
+                const context = vm.$vnode && vm.$vnode.context;
+                if (context && !context._isDestroyed) {
+                    contexts.add(context);
+                }
+            }
+        });
+    });
+    contexts.forEach(forceUpdateSingleInstance);
 }
 
 function escapeRegExp(value) {
@@ -151,7 +271,8 @@ export async function triggerTemplateChangeForComponentTags(
         .filter(model => model instanceof TemplateModel && model.get('esm_module'));
     const names = componentTagNames(componentNames);
     const affectedTemplateModels = names.length
-        ? stringTemplateModels.filter(model => names.some(name => templateText(model).match(componentTagRe(name))))
+        ? stringTemplateModels
+            .filter(model => names.some(name => templateText(model).match(componentTagRe(name))))
         : [];
     triggerTemplateChange(
         [

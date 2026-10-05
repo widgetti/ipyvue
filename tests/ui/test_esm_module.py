@@ -130,6 +130,62 @@ def test_esm_module_late_plugin_refreshes_existing_template(
     page_session.locator(".esm-late-plugin-hello >> text=plugin late").wait_for()
 
 
+def test_esm_module_late_plugin_refreshes_slot_content(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    class Widget(vue.VueTemplate):
+        template = traitlets.Unicode(
+            """
+            <template>
+                <slot-host>
+                    <late-slot-tag name="slot"></late-slot-tag>
+                </slot-host>
+            </template>
+            """
+        ).tag(sync=True)
+        components = traitlets.Dict(
+            {
+                "slot-host": (
+                    "<template>"
+                    '<div class="late-slot-host"><slot></slot></div>'
+                    "</template>"
+                )
+            }
+        ).tag(sync=True)
+
+    display(Widget())
+    page_session.locator("late-slot-tag").wait_for(state="attached")
+
+    vue.define_module(
+        "esm-late-slot-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        await new Promise(resolve => { window.__releaseLateSlotPlugin = resolve; });
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("late-slot-tag", {
+                    props: { name: { type: String, required: true } },
+                    render(h) {
+                        return h(
+                            "div",
+                            { class: "late-slot-tag" },
+                            `late ${this.name}`,
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.wait_for_function(
+        "typeof window.__releaseLateSlotPlugin === 'function'"
+    )
+    page_session.evaluate("window.__releaseLateSlotPlugin()")
+    page_session.locator(".late-slot-tag >> text=late slot").wait_for()
+
+
 def test_esm_module_plugin_reload_refreshes_replaced_component(
     solara_test, page_session: playwright.sync_api.Page
 ):
@@ -184,6 +240,57 @@ def test_esm_module_plugin_reload_refreshes_replaced_component(
         """,
     )
     page_session.locator(".esm-reload-tag >> text=reload v2").wait_for()
+
+
+def test_esm_module_plugin_reload_refreshes_replaced_vue_widget_tag(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-replace-widget-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("x-replace-tag", {
+                    render(h) {
+                        return h(
+                            "span",
+                            { class: "x-replace-tag" },
+                            "old implementation",
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+
+    display(vue.Html(tag="x-replace-tag"))
+    page_session.locator(".x-replace-tag >> text=old implementation").wait_for()
+    page_session.locator("x-replace-tag").wait_for(state="detached")
+
+    vue.define_module(
+        "esm-replace-widget-plugin-module",
+        code="""
+        import Vue from "vue";
+
+        export default {
+            install(vueOrApp) {
+                vueOrApp.component("x-replace-tag", {
+                    render(h) {
+                        return h(
+                            "span",
+                            { class: "x-replace-tag" },
+                            "new implementation",
+                        );
+                    },
+                });
+            },
+        };
+        """,
+    )
+    page_session.locator(".x-replace-tag >> text=new implementation").wait_for()
 
 
 def test_esm_module_late_plugin_refreshes_esm_template_export(
