@@ -250,14 +250,20 @@ function createComponentObject(model, parentView) {
  * model's version, so it renders the new implementation after a change. */
 function createTemplateHolder(model, templateModel, parentView) {
     let esm = {};
+    let compiled = {};
     return {
         functional: true,
         render(h, { data, children }) {
             const version = implementationVersion(model, templateModel);
             const moduleName = templateModel.get('esm_module');
             if (!moduleName) {
-                /* esm_module was unset: render the current compiled template */
-                return h(createComponentObject(model, parentView), data, children);
+                /* esm_module was unset: render the current compiled template,
+                 * rebuilt only when its source changes so it keeps its state */
+                const template = templateModel.get('template');
+                if (compiled.template !== template) {
+                    compiled = { template, object: createComponentObject(model, parentView) };
+                }
+                return h(compiled.object, data, children);
             }
             const component = getModuleExport(moduleName, templateModel.get('esm_export'));
             if (!component) {
