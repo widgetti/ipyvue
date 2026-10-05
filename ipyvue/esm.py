@@ -78,6 +78,10 @@ def define_module(
             if dependencies is not None:
                 existing.dependencies = dependencies
         return existing
+    if dependencies is None and existing is not None:
+        # a closed widget's name keeps its dependencies, like solara: the
+        # default (all earlier live names) would now give a->[b], b->[a]
+        dependencies = list(existing.dependencies)
     if url is not None:
         widget = Module(
             url=url, name=name, dependencies=_dependencies(name, dependencies)

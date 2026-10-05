@@ -65,3 +65,15 @@ def test_define_module_redefine_updates_live_widget_without_cycle():
     assert a2 is a and b2 is b
     assert a.dependencies == [] and a.code == "export default 3;"
     assert b.dependencies == ["a"] and b.url and b.code == ""
+
+
+def test_define_module_redefine_closed_module_keeps_dependencies():
+    a = esm.define_module("a", code="export default 1;")
+    b = esm.define_module("b", code="export default 2;")
+    a.close()
+
+    a2 = esm.define_module("a", code="export default 3;")
+
+    assert a2 is not a
+    assert b.dependencies == ["a"]
+    assert a2.dependencies == []
