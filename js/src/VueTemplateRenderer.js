@@ -79,7 +79,11 @@ export function createModelMixin(model, templateModel, parentView) {
         created() {
             this.__onTemplateChange = () => {
                 bumpTemplateRefreshVersion(templateModel);
-                this.viewCtx.refreshRoot();
+                if (typeof this.viewCtx.refreshRoot === 'function') {
+                    this.viewCtx.refreshRoot();
+                } else {
+                    this.$root.$forceUpdate();
+                }
             };
             templateModel.on('change:template', this.__onTemplateChange);
             templateModel.on('change:source_url', this.__onTemplateChange);

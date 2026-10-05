@@ -5,7 +5,7 @@ import {addApp, removeApp} from "./VueComponentModel";
 
 window.Vue = Vue;
 
-export function createViewContext(view, refreshRoot = () => {}) {
+export function createViewContext(view, refreshRoot = undefined) {
     return {
         getModelById(modelId) {
             return view.model.widget_manager.get_model(modelId);
