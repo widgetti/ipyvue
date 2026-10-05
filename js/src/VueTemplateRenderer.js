@@ -30,13 +30,26 @@ const templateChangeEvents = 'change:template change:esm_module change:esm_expor
 const esmModelChangeEvents = 'change:components change:events';
 
 function forceUpdateOwnerAndRoot(vm) {
+    const seen = new Set();
+    const forceUpdate = (target) => {
+        if (!target || target._isDestroyed || seen.has(target)) {
+            return;
+        }
+        seen.add(target);
+        if (target.childCache) {
+            target.childCache = {};
+            target.childIds = [];
+        }
+        target.$forceUpdate();
+    };
     const owner = vm.$vnode && vm.$vnode.context;
-    if (owner && !owner._isDestroyed) {
-        owner.$forceUpdate();
+    let current = vm;
+    while (current && !current._isDestroyed) {
+        forceUpdate(current);
+        current = current.$parent;
     }
-    if (vm.$root && !vm.$root._isDestroyed) {
-        vm.$root.$forceUpdate();
-    }
+    forceUpdate(owner);
+    forceUpdate(vm.$root);
 }
 
 function scopeStyleElement(styleElt, scopeId) {

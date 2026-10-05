@@ -695,8 +695,8 @@ def test_esm_vue_template_inside_vuetify_container_refreshes_on_module_reload(
 def test_esm_template_recovers_when_missing_dependency_is_removed(
     solara_test, page_session: playwright.sync_api.Page
 ):
-    vue.define_module(
-        "esm-recovered-dependency-module",
+    module = vue.esm.Module(
+        name="esm-recovered-dependency-module",
         code="""
         export const Ready = {
             template: `<div class="esm-recovered">dependency recovered</div>`,
@@ -713,15 +713,7 @@ def test_esm_template_recovers_when_missing_dependency_is_removed(
     display(widget)
     page_session.locator(".esm-recovered").wait_for(state="detached")
 
-    vue.define_module(
-        "esm-recovered-dependency-module",
-        code="""
-        export const Ready = {
-            template: `<div class="esm-recovered">dependency recovered</div>`,
-        };
-        """,
-        dependencies=[],
-    )
+    module.dependencies = []
     page_session.locator(".esm-recovered >> text=dependency recovered").wait_for()
 
 
