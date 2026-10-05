@@ -558,6 +558,173 @@ def test_esm_template_esm_tag_module_reload_refreshes_mounted_view(
     page_session.locator(".esm-lib-tag >> text=lib v2").wait_for()
 
 
+def test_nested_esm_vue_template_component_refreshes_on_module_reload(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-nested-inner-module",
+        code="""
+        export const Inner = {
+            template: `<div class="esm-nested-inner">inner v1</div>`,
+        };
+        """,
+    )
+    vue.define_module(
+        "esm-nested-outer-module",
+        code="""
+        export const Outer = {
+            template: `<inner-view></inner-view>`,
+        };
+        """,
+    )
+
+    inner = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-nested-inner-module", esm_export="Inner")
+    )
+    outer = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-nested-outer-module", esm_export="Outer"),
+        components={"inner-view": inner},
+    )
+
+    display(outer)
+    page_session.locator(".esm-nested-inner >> text=inner v1").wait_for()
+
+    vue.define_module(
+        "esm-nested-inner-module",
+        code="""
+        export const Inner = {
+            template: `<div class="esm-nested-inner">inner v2</div>`,
+        };
+        """,
+    )
+    page_session.locator(".esm-nested-inner >> text=inner v2").wait_for()
+
+
+def test_nested_esm_vue_template_component_refreshes_on_components_change(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-nested-swap-module",
+        code="""
+        export const Host = {
+            template: `<swap-child></swap-child>`,
+        };
+        """,
+    )
+    vue.define_module(
+        "esm-nested-swap-child-module",
+        code="""
+        export const First = {
+            template: `<div class="esm-nested-swap">first nested</div>`,
+        };
+        export const Second = {
+            template: `<div class="esm-nested-swap">second nested</div>`,
+        };
+        """,
+    )
+    vue.define_module(
+        "esm-nested-swap-outer-module",
+        code="""
+        export const Outer = {
+            template: `<inner-view></inner-view>`,
+        };
+        """,
+    )
+
+    inner = vue.VueTemplate(
+        template=vue.Template(esm_module="esm-nested-swap-module", esm_export="Host"),
+        components={
+            "swap-child": {
+                "esm_module": "esm-nested-swap-child-module",
+                "esm_export": "First",
+            }
+        },
+    )
+    outer = vue.VueTemplate(
+        template=vue.Template(
+            esm_module="esm-nested-swap-outer-module", esm_export="Outer"
+        ),
+        components={"inner-view": inner},
+    )
+
+    display(outer)
+    page_session.locator(".esm-nested-swap >> text=first nested").wait_for()
+
+    inner.components = {
+        "swap-child": {
+            "esm_module": "esm-nested-swap-child-module",
+            "esm_export": "Second",
+        }
+    }
+    page_session.locator(".esm-nested-swap >> text=second nested").wait_for()
+
+
+def test_esm_vue_template_inside_vuetify_container_refreshes_on_module_reload(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    v = pytest.importorskip("ipyvuetify")
+
+    vue.define_module(
+        "esm-nested-vuetify-module",
+        code="""
+        export const Inner = {
+            template: `<div class="esm-nested-vuetify">vuetify v1</div>`,
+        };
+        """,
+    )
+
+    inner = vue.VueTemplate(
+        template=vue.Template(
+            esm_module="esm-nested-vuetify-module", esm_export="Inner"
+        )
+    )
+    display(v.Container(children=[inner]))
+    page_session.locator(".esm-nested-vuetify >> text=vuetify v1").wait_for()
+
+    vue.define_module(
+        "esm-nested-vuetify-module",
+        code="""
+        export const Inner = {
+            template: `<div class="esm-nested-vuetify">vuetify v2</div>`,
+        };
+        """,
+    )
+    page_session.locator(".esm-nested-vuetify >> text=vuetify v2").wait_for()
+
+
+def test_esm_template_recovers_when_missing_dependency_is_removed(
+    solara_test, page_session: playwright.sync_api.Page
+):
+    vue.define_module(
+        "esm-recovered-dependency-module",
+        code="""
+        export const Ready = {
+            template: `<div class="esm-recovered">dependency recovered</div>`,
+        };
+        """,
+        dependencies=["never-defined"],
+    )
+
+    widget = vue.VueTemplate(
+        template=vue.Template(
+            esm_module="esm-recovered-dependency-module", esm_export="Ready"
+        )
+    )
+    display(widget)
+    page_session.locator(".esm-recovered").wait_for(state="detached")
+
+    vue.define_module(
+        "esm-recovered-dependency-module",
+        code="""
+        export const Ready = {
+            template: `<div class="esm-recovered">dependency recovered</div>`,
+        };
+        """,
+        dependencies=[],
+    )
+    page_session.locator(".esm-recovered >> text=dependency recovered").wait_for()
+
+
 def test_esm_template_missing_export_does_not_break_sibling_then_recovers(
     solara_test, page_session: playwright.sync_api.Page
 ):

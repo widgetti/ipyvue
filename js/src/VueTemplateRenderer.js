@@ -29,6 +29,16 @@ function applyScopeId(vm, scopeId) {
 const templateChangeEvents = 'change:template change:esm_module change:esm_export';
 const esmModelChangeEvents = 'change:components change:events';
 
+function forceUpdateOwnerAndRoot(vm) {
+    const owner = vm.$vnode && vm.$vnode.context;
+    if (owner && !owner._isDestroyed) {
+        owner.$forceUpdate();
+    }
+    if (vm.$root && !vm.$root._isDestroyed) {
+        vm.$root.$forceUpdate();
+    }
+}
+
 function scopeStyleElement(styleElt, scopeId) {
     const scopeSelector = `[${scopeId}]`;
 
@@ -187,7 +197,7 @@ function createComponentObject(model, parentView) {
         },
         created() {
             this.__onTemplateChange = () => {
-                this.$root.$forceUpdate();
+                forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
             addModelListeners(model, this);
@@ -254,7 +264,7 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
         },
         created() {
             this.__onTemplateChange = () => {
-                this.$root.$forceUpdate();
+                forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
             model.on(esmModelChangeEvents, this.__onTemplateChange);
@@ -335,7 +345,7 @@ function createEsmTemplateComponent(model, templateModel, parentView) {
             const component = {
                 created() {
                     this.__onTemplateChange = () => {
-                        this.$root.$forceUpdate();
+                        forceUpdateOwnerAndRoot(this);
                     };
                     templateModel.on(templateChangeEvents, this.__onTemplateChange);
                     model.on(esmModelChangeEvents, this.__onTemplateChange);
@@ -389,7 +399,7 @@ function emptyComponent(templateModel) {
     return {
         created() {
             this.__onTemplateChange = () => {
-                this.$root.$forceUpdate();
+                forceUpdateOwnerAndRoot(this);
             };
             templateModel.on(templateChangeEvents, this.__onTemplateChange);
         },
@@ -504,7 +514,13 @@ function createMethods(model, parentView) {
 function createInstanceComponents(components, parentView) {
     return components.reduce((result, [name, model]) => {
         // eslint-disable-next-line no-param-reassign
-        result[name] = createComponentObject(model, parentView);
+        result[name] = model instanceof VueTemplateModel
+            ? {
+                render(h) {
+                    return h(createComponentObject(model, parentView));
+                },
+            }
+            : createComponentObject(model, parentView);
         return result;
     }, {});
 }

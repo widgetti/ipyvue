@@ -7,15 +7,23 @@ const roots = new Set();
 Vue.mixin({
     beforeCreate() {
         if (this.$root === this) {
-            roots.add(this);
+            registerRoot(this);
         }
     },
     destroyed() {
         if (this.$root === this) {
-            roots.delete(this);
+            unregisterRoot(this);
         }
     },
 });
+
+export function registerRoot(vm) {
+    roots.add(vm);
+}
+
+export function unregisterRoot(vm) {
+    roots.delete(vm);
+}
 
 function forceUpdateTree(vm) {
     if (!vm || vm._isDestroyed) {
@@ -61,7 +69,10 @@ function componentTagNames(componentNames) {
 }
 
 async function getWidgetModels(widgetManager) {
-    return Promise.all(Object.values(widgetManager._models));
+    const results = await Promise.allSettled(Object.values(widgetManager._models));
+    return results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
 }
 
 function templateText(model) {
