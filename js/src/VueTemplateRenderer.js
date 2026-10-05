@@ -1,7 +1,6 @@
 import { WidgetModel } from '@jupyter-widgets/base';
 import { v4 as uuid4 } from 'uuid';
-import cloneDeep from 'lodash/cloneDeep';
-import isEqual from 'lodash/isEqual';
+import _ from 'lodash';
 import * as Vue from 'vue';
 import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
@@ -107,7 +106,7 @@ function createDataMapping(model) {
         .filter(prop => !prop.startsWith('_')
             && !['events', 'template', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         .reduce((result, prop) => {
-            result[prop] = cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
+            result[prop] = _.cloneDeep(model.get(prop)); // eslint-disable-line no-param-reassign
             return result;
         }, {});
 }
@@ -118,10 +117,10 @@ function addModelListeners(model, vueModel) {
             && !['v_model', 'components', 'layout', 'css', 'data', 'methods'].includes(prop))
         // eslint-disable-next-line no-param-reassign
         .forEach(prop => model.on(`change:${prop}`, () => {
-            if (isEqual(model.get(prop), vueModel[prop])) {
+            if (_.isEqual(model.get(prop), vueModel[prop])) {
                 return;
             }
-            vueModel[prop] = cloneDeep(model.get(prop));
+            vueModel[prop] = _.cloneDeep(model.get(prop));
         }));
     model.on('msg:custom', (content, buffers) => {
         if (!content['method']) {
@@ -148,11 +147,11 @@ function createWatches(model, parentView) {
             [prop]: {
                 handler(value) {
                     /* Don't send changes received from backend back */
-                    if (isEqual(value, model.get(prop))) {
+                    if (_.isEqual(value, model.get(prop))) {
                         return;
                     }
 
-                    model.set(prop, value === undefined ? null : cloneDeep(value));
+                    model.set(prop, value === undefined ? null : _.cloneDeep(value));
                     model.save_changes(model.callbacks(parentView));
                 },
                 deep: true,
