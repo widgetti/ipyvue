@@ -214,6 +214,10 @@ jobs:
     if: startsWith(github.event.ref, 'refs/tags/v')
     needs: [release-dry-run]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # npm trusted publishing (OIDC), replaces the NPM_TOKEN secret
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -222,8 +226,11 @@ jobs:
       - name: Install node
         uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
-          registry-url: "https://registry.npmjs.org"
+          # trusted publishing needs npm >= 11.5.1, which needs node >= 20
+          node-version: "22.x"
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -248,5 +255,4 @@ jobs:
           if [[ $PRE_RELEASE == "true" ]]; then export TAG="next"; else export TAG="latest"; fi
           npm publish --tag ${TAG} --access public *.tgz
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PRE_RELEASE: ${{ github.event.release.prerelease }}
