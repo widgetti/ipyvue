@@ -203,6 +203,7 @@ setup(
     long_description=LONG_DESCRIPTION,
     include_package_data=True,
     data_files=get_data_files(),
+    python_requires=">=3.8",
     install_requires=[
         "ipywidgets>=7.0.0",
     ],
