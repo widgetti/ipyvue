@@ -3,7 +3,7 @@ import uuid4 from 'uuid/v4';
 import _ from 'lodash';
 import Vue from 'vue';
 import { parseComponent } from '@mariobuikhuizen/vue-compiler-addon';
-import { createObjectForNestedModel, eventToObject, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
+import { createObjectForNestedModel, eventToObject, saveChanges, vueRender } from './VueRenderer'; // eslint-disable-line import/no-cycle
 import { VueModel } from './VueModel';
 import { VueTemplateModel } from './VueTemplateModel';
 import httpVueLoader from './httpVueLoader';
@@ -405,7 +405,7 @@ function createWatches(model, parentView, templateWatchers) {
                 }
 
                 model.set(prop, value === undefined ? null : _.cloneDeep(value));
-                model.save_changes(model.callbacks(parentView));
+                saveChanges(model, model.callbacks(parentView));
             },
             deep: true,
             immediate: watchesImmediately(templateWatchers && templateWatchers[prop]),
@@ -502,7 +502,7 @@ function createClassComponents(components, containerModel, parentView) {
                         );
                     } else {
                         this.model.set(prop, value);
-                        this.model.save_changes(this.model.callbacks(parentView));
+                        saveChanges(this.model, this.model.callbacks(parentView));
                     }
                 },
             }), {}),
