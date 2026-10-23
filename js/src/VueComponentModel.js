@@ -77,10 +77,13 @@ export class VueComponentModel extends DOMWidgetModel {
 
                 find_usage(name);
 
+                // an ES module template has no source to search, so it may use
+                // the component: refresh it too
                 const affectedTemplateModels = models
                     .filter(model => model instanceof TemplateModel
-                        && model.get('template')
-                        && affectedComponents.some(cname => model.get('template').match(re(cname))));
+                        && (model.get('esm_module')
+                            || (model.get('template')
+                                && affectedComponents.some(cname => model.get('template').match(re(cname))))));
 
                 affectedTemplateModels.forEach(model => model.trigger('change:template'));
             })();
