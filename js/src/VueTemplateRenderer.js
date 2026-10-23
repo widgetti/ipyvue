@@ -270,7 +270,7 @@ function createTemplateHolder(model, templateModel, parentView) {
                 return h();
             }
             if (esm.component !== component || esm.version !== version) {
-                const object = createEsmTemplateObject(model, component, parentView);
+                const object = createEsmTemplateObject(model, templateModel, component, parentView);
                 esm = { component, version, object };
             }
             return h(esm.object, data, children);
@@ -299,7 +299,7 @@ function implementationVersion(model, templateModel) {
  * mixins in order, so model traits override the script's data()
  * placeholders and injected event handlers override method stubs - the same
  * precedence as the in-browser compiled path. */
-function createEsmTemplateObject(model, component, parentView) {
+function createEsmTemplateObject(model, templateModel, component, parentView) {
     /* template-form components get their state as data (for the two-way
      * model sync); vue2 lets a props declaration (e.g. written for type
      * checkers) shadow that data, so ignore it like the compiled-template
@@ -313,9 +313,14 @@ function createEsmTemplateObject(model, component, parentView) {
         },
         created() {
             addModelListeners(model, this);
+            /* a registered component it uses changed (VueComponentModel
+             * triggers this, since an export has no source to search) */
+            this.__onTemplateChange = () => this.$forceUpdate();
+            templateModel.on('change:template', this.__onTemplateChange);
         },
         beforeDestroy() {
             model.off(null, null, this);
+            templateModel.off('change:template', this.__onTemplateChange);
         },
         watch: createWatches(model, parentView, null),
         methods: createMethods(model, parentView),
