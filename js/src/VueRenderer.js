@@ -74,6 +74,19 @@ function pickSerializable(object, depth=0, max_depth=2) {
     return obj;
 }
 
+/* A child rendered inline in its parent's Vue tree outlives its model: when the
+ * kernel closes the model, the Vue component stays mounted until the parent
+ * re-renders. A write from a watcher, timer or v-model in that window has no
+ * comm to go to, and WidgetModel.sync would throw. Drop the write instead.
+ */
+export function saveChanges(model, callbacks) {
+    if (model.comm === undefined) {
+        console.debug('ipyvue: not syncing changes of a closed model', model.model_id);
+        return;
+    }
+    model.save_changes(callbacks);
+}
+
 export function eventToObject(event) {
     if (event instanceof Event) {
         return pickSerializable(event);
@@ -258,7 +271,7 @@ function createContent(createElement, model, vueModel, parentView, slotScopes) {
                 value: vueModel.v_model,
                 callback: (v) => {
                     model.set('v_model', v === undefined ? null : v);
-                    model.save_changes(model.callbacks(parentView));
+                    saveChanges(model, model.callbacks(parentView));
                 },
                 expression: 'v_model',
             },
