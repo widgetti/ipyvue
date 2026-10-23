@@ -22,6 +22,10 @@ class VueComponent(DOMWidget):
 
     name = Unicode().tag(sync=True)
     component = Unicode().tag(sync=True)
+    # alternative to `component`: an export of an ES module registered with
+    # ipyvue.define_module, e.g. a template compiled ahead of time
+    esm_module = Unicode(None, allow_none=True).tag(sync=True)
+    esm_export = Unicode(None, allow_none=True).tag(sync=True)
 
 
 vue_component_registry = {}
@@ -33,9 +37,26 @@ def register_component_from_string(name, value):
 
     if name in components.keys():
         comp = components[name]
-        comp.component = value
+        with comp.hold_sync():
+            comp.esm_module = None
+            comp.esm_export = None
+            comp.component = value
     else:
         comp = VueComponent(name=name, component=value)
+        components[name] = comp
+
+
+def register_component_from_esm(name, esm_module, esm_export=None):
+    components = vue_component_registry
+
+    if name in components.keys():
+        comp = components[name]
+        with comp.hold_sync():
+            comp.component = ""
+            comp.esm_export = esm_export
+            comp.esm_module = esm_module
+    else:
+        comp = VueComponent(name=name, esm_module=esm_module, esm_export=esm_export)
         components[name] = comp
 
 
@@ -56,5 +77,6 @@ def register_component_from_file(name, file_name, relative_to_file=None):
 __all__ = [
     "VueComponent",
     "register_component_from_string",
+    "register_component_from_esm",
     "register_component_from_file",
 ]
