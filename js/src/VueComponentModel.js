@@ -3,6 +3,7 @@ import { DOMWidgetModel } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import httpVueLoader from './httpVueLoader';
 import {TemplateModel} from './Template';
+import { getEsmComponent } from './esmModule';
 
 export class VueComponentModel extends DOMWidgetModel {
     defaults() {
@@ -14,6 +15,8 @@ export class VueComponentModel extends DOMWidgetModel {
                 _model_module_version: '^0.0.3',
                 name: null,
                 component: null,
+                esm_module: null,
+                esm_export: null,
             },
         };
     }
@@ -24,6 +27,11 @@ export class VueComponentModel extends DOMWidgetModel {
         const [, { widget_manager }] = args;
 
         const name = this.get('name');
+        if (this.get('esm_module')) {
+            // an ES module export: rendered once the module is provided
+            Vue.component(name, getEsmComponent(this.get('esm_module'), this.get('esm_export')));
+            return;
+        }
         Vue.component(name, httpVueLoader(this.get('component')));
         this.on('change:component', () => {
             Vue.component(name, httpVueLoader(this.get('component')));

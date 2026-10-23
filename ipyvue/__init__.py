@@ -9,6 +9,7 @@ from .VueTemplateWidget import VueTemplate
 from .VueComponentRegistry import (
     VueComponent,
     register_component_from_string,
+    register_component_from_esm,
     register_component_from_file,
 )
 
