@@ -35,6 +35,9 @@ export class VueComponentModel extends DOMWidgetModel {
                 const esmExport = this.get('esm_export') || 'default';
                 Vue.component(name, () => requestModule(esmModule).then((module) => {
                     if (module instanceof Error || !module[esmExport]) {
+                        // vue caches a failed factory: register a fresh one, so
+                        // a render after the module is provided again retries
+                        setTimeout(register);
                         throw new Error(`ipyvue: module "${esmModule}" has no export "${esmExport}" for component "${name}"`);
                     }
                     return module[esmExport];
