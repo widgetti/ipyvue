@@ -3,7 +3,7 @@ import { DOMWidgetModel } from '@jupyter-widgets/base';
 import Vue from 'vue';
 import httpVueLoader from './httpVueLoader';
 import {TemplateModel} from './Template';
-import { getEsmComponent } from './esmModule';
+import { requestModule } from './esmModule';
 
 export class VueComponentModel extends DOMWidgetModel {
     defaults() {
@@ -28,8 +28,11 @@ export class VueComponentModel extends DOMWidgetModel {
 
         const name = this.get('name');
         if (this.get('esm_module')) {
-            // an ES module export: rendered once the module is provided
-            Vue.component(name, getEsmComponent(this.get('esm_module'), this.get('esm_export')));
+            // an ES module export, as an async component like the source
+            // components (httpVueLoader), so it mounts with the same timing
+            const esmModule = this.get('esm_module');
+            const esmExport = this.get('esm_export') || 'default';
+            Vue.component(name, () => requestModule(esmModule).then(module => module[esmExport]));
             return;
         }
         Vue.component(name, httpVueLoader(this.get('component')));
