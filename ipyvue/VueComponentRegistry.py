@@ -37,7 +37,10 @@ def register_component_from_string(name, value):
 
     if name in components.keys():
         comp = components[name]
-        comp.component = value
+        with comp.hold_sync():
+            comp.esm_module = None
+            comp.esm_export = None
+            comp.component = value
     else:
         comp = VueComponent(name=name, component=value)
         components[name] = comp
@@ -48,8 +51,10 @@ def register_component_from_esm(name, esm_module, esm_export=None):
 
     if name in components.keys():
         comp = components[name]
-        comp.esm_module = esm_module
-        comp.esm_export = esm_export
+        with comp.hold_sync():
+            comp.component = ""
+            comp.esm_export = esm_export
+            comp.esm_module = esm_module
     else:
         comp = VueComponent(name=name, esm_module=esm_module, esm_export=esm_export)
         components[name] = comp

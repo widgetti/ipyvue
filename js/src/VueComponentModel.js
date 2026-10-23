@@ -27,17 +27,30 @@ export class VueComponentModel extends DOMWidgetModel {
         const [, { widget_manager }] = args;
 
         const name = this.get('name');
-        if (this.get('esm_module')) {
-            // an ES module export, as an async component like the source
-            // components (httpVueLoader), so it mounts with the same timing
-            const esmModule = this.get('esm_module');
-            const esmExport = this.get('esm_export') || 'default';
-            Vue.component(name, () => requestModule(esmModule).then(module => module[esmExport]));
-            return;
-        }
-        Vue.component(name, httpVueLoader(this.get('component')));
-        this.on('change:component', () => {
-            Vue.component(name, httpVueLoader(this.get('component')));
+        const register = () => {
+            if (this.get('esm_module')) {
+                // an ES module export, as an async component like the source
+                // components (httpVueLoader), so it mounts with the same timing
+                const esmModule = this.get('esm_module');
+                const esmExport = this.get('esm_export') || 'default';
+                Vue.component(name, () => requestModule(esmModule).then((module) => {
+                    if (module instanceof Error || !module[esmExport]) {
+                        throw new Error(`ipyvue: module "${esmModule}" has no export "${esmExport}" for component "${name}"`);
+                    }
+                    return module[esmExport];
+                }));
+            } else {
+                Vue.component(name, httpVueLoader(this.get('component')));
+            }
+        };
+        register();
+        // one event per update, also when hold_sync sends several of these fields
+        this.on('change', () => {
+            const changed = this.changedAttributes() || {};
+            if (!['component', 'esm_module', 'esm_export'].some(key => key in changed)) {
+                return;
+            }
+            register();
 
             (async () => {
                 const models = await Promise.all(Object.values(widget_manager._models));
@@ -53,7 +66,7 @@ export class VueComponentModel extends DOMWidgetModel {
                 function find_usage(searchName) {
                     affectedComponents.push(searchName);
                     componentModels
-                        .filter(model => model.get('component').match(re(searchName)))
+                        .filter(model => (model.get('component') || '').match(re(searchName)))
                         .forEach((model) => {
                             const cname = model.get('name');
                             if (!affectedComponents.includes(cname)) {
